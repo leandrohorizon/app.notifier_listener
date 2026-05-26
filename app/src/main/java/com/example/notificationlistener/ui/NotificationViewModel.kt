@@ -5,12 +5,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.notificationlistener.data.AppDatabase
-import com.example.notificationlistener.data.LogManager
-import com.example.notificationlistener.data.NotificationEntity
-import com.example.notificationlistener.data.toDto
+import com.example.notificationlistener.data.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -23,7 +20,49 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val db = AppDatabase.getDatabase(application)
 
     val logs = LogManager.logs
-    val pendingNotifications: Flow<List<NotificationEntity>> = db.notificationDao().getAllPendingFlow()
+    
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    private val _filterPackage = MutableStateFlow<String?>(null)
+    val filterPackage = _filterPackage.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val pendingNotifications: Flow<List<NotificationEntity>> = combine(
+        _searchQuery,
+        _filterPackage
+    ) { query, pkg ->
+        query to pkg
+    }.flatMapLatest { (query, pkg) ->
+        db.notificationDao().searchNotifications(query, pkg)
+    }
+
+    val distinctPackages: Flow<List<String>> = db.notificationDao().getDistinctPackagesFlow()
+
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds = _selectedIds.asStateFlow()
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun setFilterPackage(pkg: String?) {
+        _filterPackage.value = pkg
+    }
+
+    fun toggleSelection(id: Long) {
+        val current = _selectedIds.value.toMutableSet()
+        if (current.contains(id)) current.remove(id) else current.add(id)
+        _selectedIds.value = current
+    }
+
+    fun selectAll(ids: List<Long>) {
+        _selectedIds.value = ids.toSet()
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
 
     fun getSyncUrl(): String = prefs.getString("sync_url", "") ?: ""
 
@@ -31,14 +70,15 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         prefs.edit().putString("sync_url", url).apply()
     }
 
-    fun deleteNotification(id: Long) {
+    fun deleteNotifications(ids: List<Long>) {
         viewModelScope.launch(Dispatchers.IO) {
-            db.notificationDao().deleteById(id)
-            LogManager.addLog("Notificação deletada manualmente")
+            db.notificationDao().deleteByIds(ids)
+            clearSelection()
+            LogManager.addLog("${ids.size} notificações deletadas")
         }
     }
 
-    fun syncNotifications() {
+    fun syncNotifications(ids: List<Long>? = null) {
         val urlString = getSyncUrl()
         if (urlString.isEmpty()) {
             LogManager.addLog("Falha: URL de sincronização não configurada")
@@ -48,8 +88,23 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch(Dispatchers.IO) {
             val dao = db.notificationDao()
             var totalSynced = 0
-
-            try {
+            
+            // Se IDs forem fornecidos, sincroniza apenas eles. Caso contrário, sincroniza tudo via paginação.
+            if (ids != null) {
+                // Sincronização de selecionados (simplificada para o exemplo)
+                val notifications = dao.getAllPendingFlow().first().filter { ids.contains(it.id) }
+                if (notifications.isNotEmpty()) {
+                    val success = sendBatch(urlString, notifications)
+                    if (success) {
+                        dao.deleteByIds(ids)
+                        totalSynced = notifications.size
+                        clearSelection()
+                    } else {
+                        LogManager.addLog("Falha ao sincronizar selecionados")
+                    }
+                }
+            } else {
+                // Comportamento padrão: Tudo
                 while (true) {
                     val batch = dao.getNextBatch(100)
                     if (batch.isEmpty()) break
@@ -63,13 +118,10 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         break
                     }
                 }
-                if (totalSynced > 0) {
-                    LogManager.addLog("Sincronizados $totalSynced registros com sucesso")
-                } else {
-                    LogManager.addLog("Nada para sincronizar")
-                }
-            } catch (e: Exception) {
-                LogManager.addLog("Erro na sincronização: ${e.message}")
+            }
+            
+            if (totalSynced > 0) {
+                LogManager.addLog("Sincronizados $totalSynced registros com sucesso")
             }
         }
     }

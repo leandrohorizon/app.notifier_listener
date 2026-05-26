@@ -16,9 +16,9 @@ object LogManager {
         val timestamp = dateFormat.format(Date())
         val logLine = "[$timestamp] $message"
         val currentLogs = _logs.value.toMutableList()
-        currentLogs.add(0, logLine) // Newest first
-        if (currentLogs.size > 100) {
-            currentLogs.removeAt(currentLogs.size - 1)
+        currentLogs.add(logLine) // Adiciona no final (ordem cronológica)
+        if (currentLogs.size > 200) {
+            currentLogs.removeAt(0)
         }
         _logs.value = currentLogs
     }

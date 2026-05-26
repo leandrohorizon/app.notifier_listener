@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.notificationlistener.service.ForegroundService
+import com.example.notificationlistener.ui.LogScreen
 import com.example.notificationlistener.ui.MainScreen
 import com.example.notificationlistener.ui.NotificationViewModel
 import com.example.notificationlistener.ui.SettingsScreen
@@ -49,15 +51,21 @@ class MainActivity : ComponentActivity() {
                         NavigationBar {
                             NavigationBarItem(
                                 icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                                label = { Text("Principal") },
+                                label = { Text("Pendentes") },
                                 selected = selectedTab == 0,
                                 onClick = { selectedTab = 0 }
                             )
                             NavigationBarItem(
-                                icon = { Icon(Icons.Default.Settings, contentDescription = "Config") },
-                                label = { Text("Config") },
+                                icon = { Icon(Icons.Default.List, contentDescription = "Logs") },
+                                label = { Text("Logs") },
                                 selected = selectedTab == 1,
                                 onClick = { selectedTab = 1 }
+                            )
+                            NavigationBarItem(
+                                icon = { Icon(Icons.Default.Settings, contentDescription = "Config") },
+                                label = { Text("Config") },
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 }
                             )
                         }
                     }
@@ -65,7 +73,8 @@ class MainActivity : ComponentActivity() {
                     Surface(modifier = Modifier.padding(innerPadding)) {
                         when (selectedTab) {
                             0 -> MainScreen(viewModel)
-                            1 -> SettingsScreen(viewModel)
+                            1 -> LogScreen(viewModel)
+                            2 -> SettingsScreen(viewModel)
                         }
                     }
                 }

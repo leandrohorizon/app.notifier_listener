@@ -17,6 +17,17 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications ORDER BY created_at DESC")
     fun getAllPendingFlow(): Flow<List<NotificationEntity>>
 
+    @Query("""
+        SELECT * FROM notifications 
+        WHERE (:packageName IS NULL OR package_name = :packageName)
+        AND (title LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%')
+        ORDER BY created_at DESC
+    """)
+    fun searchNotifications(query: String, packageName: String?): Flow<List<NotificationEntity>>
+
+    @Query("SELECT DISTINCT package_name FROM notifications")
+    fun getDistinctPackagesFlow(): Flow<List<String>>
+
     @Query("DELETE FROM notifications WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
 
