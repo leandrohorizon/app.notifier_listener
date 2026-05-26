@@ -1,47 +1,91 @@
 package com.example.notificationlistener
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.notificationlistener.service.ForegroundService
+import com.example.notificationlistener.ui.MainScreen
+import com.example.notificationlistener.ui.NotificationViewModel
+import com.example.notificationlistener.ui.SettingsScreen
 import com.example.notificationlistener.ui.theme.NotificationListenerTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            ForegroundService.startService(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        checkPermissions()
+
         setContent {
             NotificationListenerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                var selectedTab by remember { mutableIntStateOf(0) }
+                val viewModel: NotificationViewModel = viewModel()
+
+                Scaffold(
+                    bottomBar = {
+                        NavigationBar {
+                            NavigationBarItem(
+                                icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                                label = { Text("Principal") },
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 }
+                            )
+                            NavigationBarItem(
+                                icon = { Icon(Icons.Default.Settings, contentDescription = "Config") },
+                                label = { Text("Config") },
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    Surface(modifier = Modifier.padding(innerPadding)) {
+                        when (selectedTab) {
+                            0 -> MainScreen(viewModel)
+                            1 -> SettingsScreen(viewModel)
+                        }
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    NotificationListenerTheme {
-        Greeting("Android")
+    private fun checkPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                ForegroundService.startService(this)
+            }
+        } else {
+            ForegroundService.startService(this)
+        }
     }
 }
