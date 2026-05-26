@@ -10,6 +10,7 @@ import com.example.notificationlistener.data.LogManager
 import com.example.notificationlistener.data.NotificationEntity
 import com.example.notificationlistener.data.toDto
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -19,12 +20,22 @@ import java.net.URL
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs: SharedPreferences = application.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val db = AppDatabase.getDatabase(application)
+
     val logs = LogManager.logs
+    val pendingNotifications: Flow<List<NotificationEntity>> = db.notificationDao().getAllPendingFlow()
 
     fun getSyncUrl(): String = prefs.getString("sync_url", "") ?: ""
 
     fun setSyncUrl(url: String) {
         prefs.edit().putString("sync_url", url).apply()
+    }
+
+    fun deleteNotification(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.notificationDao().deleteById(id)
+            LogManager.addLog("Notificação deletada manualmente")
+        }
     }
 
     fun syncNotifications() {
@@ -35,7 +46,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val dao = AppDatabase.getDatabase(getApplication()).notificationDao()
+            val dao = db.notificationDao()
             var totalSynced = 0
 
             try {

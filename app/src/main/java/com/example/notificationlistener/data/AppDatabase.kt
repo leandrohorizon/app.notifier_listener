@@ -21,6 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "notification_database"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

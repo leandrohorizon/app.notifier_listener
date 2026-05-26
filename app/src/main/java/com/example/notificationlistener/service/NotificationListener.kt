@@ -17,13 +17,14 @@ class NotificationListener : NotificationListenerService() {
         super.onNotificationPosted(sbn)
         sbn?.let {
             val packageName = it.packageName
-            
-            // Ignore notifications from own package
-            if (packageName == applicationContext.packageName) return
-
             val extras = it.notification.extras
             val title = extras.getString("android.title") ?: ""
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
+
+            // Ignore notifications from own package, EXCEPT for the test notification
+            if (packageName == applicationContext.packageName && title != "Teste de Captura") {
+                return
+            }
 
             // Filter: Ignore notifications with no content
             if (title.isEmpty() && text.isEmpty()) return
