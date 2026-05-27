@@ -71,6 +71,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     val distinctPackages: Flow<List<String>> = db.notificationDao().getDistinctPackagesFlow()
     val savedFilters: Flow<List<SavedFilterEntity>> = db.savedFilterDao().getAllFiltersFlow()
 
+    val activeCount: Flow<Int> = db.notificationDao().getAllPendingFlow().map { list -> list.count { !it.is_muted } }
+    val mutedCount: Flow<Int> = db.notificationDao().getAllPendingFlow().map { list -> list.count { it.is_muted } }
+
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
 
