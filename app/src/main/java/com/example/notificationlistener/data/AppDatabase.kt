@@ -3,8 +3,10 @@ package com.example.notificationlistener.data
 import android.content.Context
 import androidx.room.AutoMigration
 import androidx.room.Database
+import androidx.room.RenameColumn
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.AutoMigrationSpec
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,17 +20,23 @@ import kotlinx.coroutines.launch
         MuteRuleEntity::class,
         SavedFilterEntity::class
     ],
-    version = 5,
+    version = 6,
     autoMigrations = [
-        AutoMigration(from = 4, to = 5)
+        AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6, spec = AppDatabase.MyAutoMigration::class)
     ],
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
+    @RenameColumn(tableName = "saved_filters", fromColumnName = "query", toColumnName = "keyword_query")
+    @RenameColumn(tableName = "saved_filters", fromColumnName = "package_filter", toColumnName = "package_names")
+    class MyAutoMigration : AutoMigrationSpec
+
     abstract fun notificationDao(): NotificationDao
     abstract fun appFilterDao(): AppFilterDao
     abstract fun keywordDao(): KeywordDao
     abstract fun muteRuleDao(): MuteRuleDao
+    abstract fun savedFilterDao(): SavedFilterDao
 
     companion object {
         @Volatile

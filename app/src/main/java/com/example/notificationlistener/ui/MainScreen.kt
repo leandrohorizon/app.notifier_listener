@@ -1,7 +1,10 @@
 package com.example.notificationlistener.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,11 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.notificationlistener.data.NotificationEntity
+import com.example.notificationlistener.data.SavedFilterEntity
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: NotificationViewModel) {
     val pending by viewModel.pendingNotifications.collectAsState(initial = emptyList())
@@ -23,11 +28,19 @@ fun MainScreen(viewModel: NotificationViewModel) {
     val filterPackage by viewModel.filterPackage.collectAsState()
     val distinctPackages by viewModel.distinctPackages.collectAsState(initial = emptyList())
     val selectedIds by viewModel.selectedIds.collectAsState()
+    val savedFilters by viewModel.savedFilters.collectAsState(initial = emptyList())
+    val activePreset by viewModel.activePreset.collectAsState()
+    val showMutedOnly by viewModel.showMutedOnly.collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
 
     var showFilterMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSyncConfirm by remember { mutableStateOf(false) }
     var muteCandidate by remember { mutableStateOf<NotificationEntity?>(null) }
+    
+    var filterToEdit by remember { mutableStateOf<SavedFilterEntity?>(null) }
+    var showFilterEditor by remember { mutableStateOf(false) }
+    var presetToDelete by remember { mutableStateOf<SavedFilterEntity?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Barra de Busca e Filtro
@@ -36,7 +49,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
                 value = searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Pesquisar notificações...") },
+                placeholder = { Text("Pesquisar...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true
             )
@@ -64,9 +77,74 @@ fun MainScreen(viewModel: NotificationViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Ações em Lote / Status
+        // Linha de Chips (Presets + Muted Toggle + Save)
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            item {
+                FilterChip(
+                    selected = activePreset == null,
+                    onClick = { viewModel.setActivePreset(null) },
+                    label = { Text("Todos") }
+                )
+            }
+
+            items(savedFilters) { filter ->
+                FilterChip(
+                    selected = activePreset?.id == filter.id,
+                    onClick = { viewModel.setActivePreset(filter) },
+                    label = { Text(filter.name) },
+                    modifier = Modifier.combinedClickable(
+                        onClick = { viewModel.setActivePreset(filter) },
+                        onLongClick = { presetToDelete = filter }
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { 
+                            filterToEdit = filter
+                            showFilterEditor = true
+                        }, modifier = Modifier.size(18.dp)) {
+                            Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(14.dp))
+                        }
+                    }
+                )
+            }
+
+            item {
+                IconButton(
+                    onClick = { 
+                        filterToEdit = null
+                        showFilterEditor = true 
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.Default.AddCircleOutline, contentDescription = "Novo Filtro")
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.width(4.dp))
+                FilterChip(
+                    selected = showMutedOnly,
+                    onClick = { viewModel.toggleMutedOnly() },
+                    label = { Text("Silenciados") },
+                    leadingIcon = {
+                        Icon(
+                            if (showMutedOnly) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Ações em Lote
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -80,22 +158,21 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         else viewModel.clearSelection()
                     }
                 )
-                Text("Selecionar Tudo", style = MaterialTheme.typography.bodyMedium)
+                Text("Tudo", style = MaterialTheme.typography.bodySmall)
             }
             
             if (selectedIds.isNotEmpty()) {
                 Row {
                     IconButton(onClick = { showSyncConfirm = true }) {
-                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar Selecionados")
+                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
                     }
                     IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Apagar Selecionados", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         }
 
-        // Botão Principal (Sincronizar Tudo ou Selecionados)
         Button(
             onClick = { if (selectedIds.isEmpty()) viewModel.syncNotifications() else showSyncConfirm = true },
             modifier = Modifier.fillMaxWidth(),
@@ -118,7 +195,49 @@ fun MainScreen(viewModel: NotificationViewModel) {
         }
     }
 
-    // Diálogos de Confirmação
+    // Editor de Filtros (Criação e Edição)
+    if (showFilterEditor) {
+        FilterEditorDialog(
+            filter = filterToEdit,
+            installedApps = installedApps,
+            onDismiss = { showFilterEditor = false },
+            onSave = { name, pkgs, keyword ->
+                if (filterToEdit == null) {
+                    viewModel.saveCurrentFilter(name, pkgs, keyword)
+                } else {
+                    viewModel.updateSavedFilter(filterToEdit!!.copy(
+                        name = name,
+                        package_names = pkgs.joinToString(","),
+                        keyword_query = keyword
+                    ))
+                }
+                showFilterEditor = false
+            },
+            onDelete = {
+                filterToEdit?.let { presetToDelete = it }
+                showFilterEditor = false
+            }
+        )
+    }
+
+    presetToDelete?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { presetToDelete = null },
+            title = { Text("Deletar Filtro") },
+            text = { Text("Deseja remover o preset '${preset.name}'?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePreset(preset)
+                    presetToDelete = null
+                }) { Text("Deletar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { presetToDelete = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Confirmações existentes
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -158,54 +277,142 @@ fun MainScreen(viewModel: NotificationViewModel) {
     }
 
     muteCandidate?.let { candidate ->
-        var muteScope by remember { mutableIntStateOf(0) } // 0: Canal, 1: Com Termo
+        var muteScope by remember { mutableIntStateOf(0) }
         var keyword by remember { mutableStateOf("") }
-
         AlertDialog(
             onDismissRequest = { muteCandidate = null },
             title = { Text("Silenciar Notificações") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Escolha como silenciar notificações do canal '${candidate.channel_id}':")
-                    
+                    Text("Canal: ${candidate.channel_id}")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = muteScope == 0, onClick = { muteScope = 0 })
-                        Text("Silenciar tudo neste canal", modifier = Modifier.padding(start = 8.dp))
+                        Text("Silenciar canal", modifier = Modifier.padding(start = 8.dp))
                     }
-                    
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = muteScope == 1, onClick = { muteScope = 1 })
-                        Text("Silenciar apenas se contiver termo", modifier = Modifier.padding(start = 8.dp))
+                        Text("Com termo", modifier = Modifier.padding(start = 8.dp))
                     }
-                    
                     if (muteScope == 1) {
-                        OutlinedTextField(
-                            value = keyword,
-                            onValueChange = { keyword = it },
-                            label = { Text("Palavra-chave (ex: reels, cupom)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+                        OutlinedTextField(value = keyword, onValueChange = { keyword = it }, label = { Text("Palavra-chave") })
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.addMuteRule(
-                        pkg = candidate.package_name,
-                        category = candidate.category,
-                        channelId = candidate.channel_id,
-                        keyword = if (muteScope == 1) keyword else null
-                    )
+                    viewModel.addMuteRule(candidate.package_name, candidate.category, candidate.channel_id, if (muteScope == 1) keyword else null)
                     muteCandidate = null
-                }) {
-                    Text("Silenciar", color = MaterialTheme.colorScheme.error)
-                }
+                }) { Text("Silenciar", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { muteCandidate = null }) { Text("Cancelar") }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FilterEditorDialog(
+    filter: SavedFilterEntity?,
+    installedApps: List<AppInfo>,
+    onDismiss: () -> Unit,
+    onSave: (String, List<String>, String?) -> Unit,
+    onDelete: () -> Unit
+) {
+    var name by remember { mutableStateOf(filter?.name ?: "") }
+    var selectedPkgs by remember { mutableStateOf(filter?.package_names?.split(",")?.filter { it.isNotBlank() } ?: emptyList()) }
+    var keyword by remember { mutableStateOf(filter?.keyword_query ?: "") }
+    var appSearch by remember { mutableStateOf("") }
+
+    val filteredApps = remember(appSearch, installedApps) {
+        if (appSearch.isBlank()) installedApps else installedApps.filter { it.name.contains(appSearch, ignoreCase = true) || it.packageName.contains(appSearch, ignoreCase = true) }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(if (filter == null) "Novo Filtro" else "Editar Filtro", style = MaterialTheme.typography.titleLarge)
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome do Preset") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                OutlinedTextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    label = { Text("Palavra-chave (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Selecionar Aplicativos (${selectedPkgs.size})", style = MaterialTheme.typography.titleSmall)
+                
+                OutlinedTextField(
+                    value = appSearch,
+                    onValueChange = { appSearch = it },
+                    label = { Text("Buscar app...") },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    singleLine = true,
+                    trailingIcon = { if (appSearch.isNotEmpty()) IconButton(onClick = { appSearch = "" }) { Icon(Icons.Default.Close, null) } }
+                )
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(filteredApps) { app ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = {
+                                selectedPkgs = if (selectedPkgs.contains(app.packageName)) selectedPkgs - app.packageName else selectedPkgs + app.packageName
+                            }).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = selectedPkgs.contains(app.packageName),
+                                onCheckedChange = { checked ->
+                                    selectedPkgs = if (checked) selectedPkgs + app.packageName else selectedPkgs - app.packageName
+                                }
+                            )
+                            Column {
+                                Text(app.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(app.packageName, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (filter != null) {
+                        TextButton(
+                            onClick = onDelete,
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Excluir")
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    Row {
+                        TextButton(onClick = onDismiss) { Text("Cancelar") }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onSave(name, selectedPkgs, keyword.ifBlank { null }) },
+                            enabled = name.isNotBlank()
+                        ) { Text("Salvar") }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -247,12 +454,8 @@ fun PendingItem(
     onToggleSelect: () -> Unit,
     onMuteClick: () -> Unit
 ) {
-    val backgroundColor = if (item.is_muted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
-
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
@@ -268,18 +471,8 @@ fun PendingItem(
                 }
             }
             
-            Text(
-                text = item.title, 
-                style = MaterialTheme.typography.bodyLarge, 
-                fontWeight = FontWeight.Bold,
-                color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = item.content, 
-                style = MaterialTheme.typography.bodyMedium, 
-                maxLines = 2,
-                color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface
-            )
+            Text(text = item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+            Text(text = item.content, style = MaterialTheme.typography.bodyMedium, maxLines = 2, color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface)
             
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!item.category.isNullOrEmpty()) {

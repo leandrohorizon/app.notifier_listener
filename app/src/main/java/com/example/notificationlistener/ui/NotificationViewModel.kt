@@ -28,17 +28,48 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _filterPackage = MutableStateFlow<String?>(null)
     val filterPackage = _filterPackage.asStateFlow()
 
+    private val _showMutedOnly = MutableStateFlow(false)
+    val showMutedOnly = _showMutedOnly.asStateFlow()
+
+    private val _activePreset = MutableStateFlow<SavedFilterEntity?>(null)
+    val activePreset = _activePreset.asStateFlow()
+
+    private data class SearchParams(
+        val query: String,
+        val pkgs: List<String>,
+        val hasFilter: Boolean,
+        val muted: Boolean
+    )
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val pendingNotifications: Flow<List<NotificationEntity>> = combine(
         _searchQuery,
-        _filterPackage
-    ) { query, pkg ->
-        query to pkg
-    }.flatMapLatest { (query, pkg) ->
-        db.notificationDao().searchNotifications(query, pkg)
+        _filterPackage,
+        _showMutedOnly,
+        _activePreset
+    ) { query, pkg, mutedOnly, preset ->
+        val effectiveQuery = preset?.keyword_query ?: query
+        
+        val effectivePkgs = if (preset != null) {
+            preset.package_names?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+        } else {
+            pkg?.let { listOf(it) } ?: emptyList()
+        }
+        
+        val hasPackageFilter = effectivePkgs.isNotEmpty()
+        
+        SearchParams(effectiveQuery, effectivePkgs, hasPackageFilter, mutedOnly)
+    }.flatMapLatest { params ->
+        db.notificationDao().searchNotifications(
+            params.query, 
+            params.pkgs, 
+            params.hasFilter, 
+            if (params.muted) true else null
+        )
     }
 
     val distinctPackages: Flow<List<String>> = db.notificationDao().getDistinctPackagesFlow()
+    val savedFilters: Flow<List<SavedFilterEntity>> = db.savedFilterDao().getAllFiltersFlow()
 
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
@@ -46,11 +77,54 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     val muteRules: Flow<List<MuteRuleEntity>> = db.muteRuleDao().getAllRulesFlow()
 
     fun setSearchQuery(query: String) {
+        _activePreset.value = null
         _searchQuery.value = query
     }
 
     fun setFilterPackage(pkg: String?) {
+        _activePreset.value = null
         _filterPackage.value = pkg
+    }
+
+    fun toggleMutedOnly() {
+        _showMutedOnly.value = !_showMutedOnly.value
+    }
+
+    fun setActivePreset(preset: SavedFilterEntity?) {
+        _activePreset.value = preset
+        if (preset == null) {
+            _searchQuery.value = ""
+            _filterPackage.value = null
+        }
+    }
+
+    fun saveCurrentFilter(name: String, packageNames: List<String>?, keyword: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val filter = SavedFilterEntity(
+                name = name,
+                package_names = packageNames?.joinToString(","),
+                keyword_query = keyword?.ifBlank { null }
+            )
+            db.savedFilterDao().insert(filter)
+            LogManager.addLog("Filtro '$name' salvo")
+        }
+    }
+
+    fun updateSavedFilter(filter: SavedFilterEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.savedFilterDao().insert(filter)
+            LogManager.addLog("Filtro '${filter.name}' atualizado")
+        }
+    }
+
+    fun deletePreset(preset: SavedFilterEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_activePreset.value?.id == preset.id) {
+                _activePreset.value = null
+            }
+            db.savedFilterDao().delete(preset)
+            LogManager.addLog("Filtro '${preset.name}' removido")
+        }
     }
 
     fun toggleSelection(id: Long) {
@@ -75,7 +149,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 channel_id = channelId,
                 text_keyword = if (keyword.isNullOrBlank()) null else keyword.trim()
             ))
-            LogManager.addLog("Regra de silenciamento criada para [$pkg]${if (keyword != null) " (Termo: $keyword)" else ""}")
+            LogManager.addLog("Regra de silenciamento criada para [$pkg]")
         }
     }
 

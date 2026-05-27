@@ -7,6 +7,6 @@ import androidx.room.PrimaryKey
 data class SavedFilterEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
-    val query: String,
-    val package_filter: String?
+    val package_names: String?, // comma separated
+    val keyword_query: String?
 )
