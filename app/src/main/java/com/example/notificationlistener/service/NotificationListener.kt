@@ -27,7 +27,7 @@ class NotificationListener : NotificationListenerService() {
         super.onNotificationPosted(sbn)
         val it = sbn ?: return
         val packageName = it.packageName
-        
+
         val notification = it.notification
         val extras = notification.extras
         val title = extras.getString("android.title") ?: ""
@@ -43,42 +43,42 @@ class NotificationListener : NotificationListenerService() {
         // Filter: Ignore notifications with no content
         if (title.isEmpty() && text.isEmpty()) return
 
-        // Filter: Ignore persistent media players
-        if (it.isOngoing && (notification.flags and android.app.Notification.FLAG_FOREGROUND_SERVICE) != 0) {
-             return
-        }
+        // // Filter: Ignore persistent media players
+        // if (it.isOngoing && (notification.flags and android.app.Notification.FLAG_FOREGROUND_SERVICE) != 0) {
+        //      return
+        // }
 
         scope.launch {
             val db = AppDatabase.getDatabase(applicationContext)
-            
-            // 1. Keyword Filter (High Priority - Skip saving if hits globally)
-            val keywords = db.keywordDao().getAllKeywords().map { it.word.lowercase() }
-            val fullContent = (title + " " + text).lowercase()
-            if (keywords.any { fullContent.contains(it) }) {
-                LogManager.addLog("Ignorada por palavra-chave global: [$packageName]")
-                return@launch
-            }
 
-            // 2. Allowlist / Deniedlist Logic
-            val filters = db.appFilterDao().getAllFilters()
-            val allowlist = filters.filter { it.is_allowed }.map { it.package_name }
-            val deniedlist = filters.filter { !it.is_allowed }.map { it.package_name }
+            // // 1. Keyword Filter (High Priority - Skip saving if hits globally)
+            // val keywords = db.keywordDao().getAllKeywords().map { it.word.lowercase() }
+             val fullContent = (title + " " + text).lowercase()
+            // if (keywords.any { fullContent.contains(it) }) {
+            //     LogManager.addLog("Ignorada por palavra-chave global: [$packageName]")
+            //     return@launch
+            // }
 
-            val shouldCapture = if (allowlist.isNotEmpty()) {
-                allowlist.contains(packageName)
-            } else {
-                !deniedlist.contains(packageName)
-            }
+            // // 2. Allowlist / Deniedlist Logic
+            // val filters = db.appFilterDao().getAllFilters()
+            // val allowlist = filters.filter { it.is_allowed }.map { it.package_name }
+            // val deniedlist = filters.filter { !it.is_allowed }.map { it.package_name }
 
-            if (!shouldCapture) {
-                if (!allowlist.contains(packageName) && !deniedlist.contains(packageName)) {
-                    // Onboarding
-                    withContext(Dispatchers.Main) {
-                        showOnboardingNotification(packageName)
-                    }
-                }
-                return@launch
-            }
+            // val shouldCapture = if (allowlist.isNotEmpty()) {
+            //     allowlist.contains(packageName)
+            // } else {
+            //     !deniedlist.contains(packageName)
+            // }
+
+            // if (!shouldCapture) {
+            //     if (!allowlist.contains(packageName) && !deniedlist.contains(packageName)) {
+            //         // Onboarding
+            //         withContext(Dispatchers.Main) {
+            //             showOnboardingNotification(packageName)
+            //         }
+            //     }
+            //     return@launch
+            // }
 
             // 3. Mute Rules Logic - SALVA PRIMEIRO
             val muteRules = db.muteRuleDao().getAllRules()
@@ -98,7 +98,7 @@ class NotificationListener : NotificationListenerService() {
                 is_muted = isMuted,
                 created_at = System.currentTimeMillis()
             )
-            
+
             db.notificationDao().insert(entity)
 
             if (isMuted) {
@@ -110,47 +110,47 @@ class NotificationListener : NotificationListenerService() {
         }
     }
 
-    private fun showOnboardingNotification(targetPackage: String) {
-        val channelId = "onboarding_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    // private fun showOnboardingNotification(targetPackage: String) {
+    //     val channelId = "onboarding_channel"
+    //     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Onboarding", NotificationManager.IMPORTANCE_HIGH)
-            notificationManager.createNotificationChannel(channel)
-        }
+    //     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    //         val channel = NotificationChannel(channelId, "Onboarding", NotificationManager.IMPORTANCE_HIGH)
+    //         notificationManager.createNotificationChannel(channel)
+    //     }
 
-        val appName = try {
-            val ai = packageManager.getApplicationInfo(targetPackage, 0)
-            packageManager.getApplicationLabel(ai).toString()
-        } catch (e: Exception) {
-            targetPackage
-        }
+    //     val appName = try {
+    //         val ai = packageManager.getApplicationInfo(targetPackage, 0)
+    //         packageManager.getApplicationLabel(ai).toString()
+    //     } catch (e: Exception) {
+    //         targetPackage
+    //     }
 
-        val notificationId = targetPackage.hashCode()
+    //     val notificationId = targetPackage.hashCode()
 
-        val allowIntent = Intent(this, FilterActionReceiver::class.java).apply {
-            putExtra("package_name", targetPackage)
-            putExtra("is_allowed", true)
-            putExtra("notification_id", notificationId)
-        }
-        val allowPending = PendingIntent.getBroadcast(this, notificationId * 2, allowIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    //     val allowIntent = Intent(this, FilterActionReceiver::class.java).apply {
+    //         putExtra("package_name", targetPackage)
+    //         putExtra("is_allowed", true)
+    //         putExtra("notification_id", notificationId)
+    //     }
+    //     val allowPending = PendingIntent.getBroadcast(this, notificationId * 2, allowIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        val denyIntent = Intent(this, FilterActionReceiver::class.java).apply {
-            putExtra("package_name", targetPackage)
-            putExtra("is_allowed", false)
-            putExtra("notification_id", notificationId)
-        }
-        val denyPending = PendingIntent.getBroadcast(this, notificationId * 2 + 1, denyIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    //     val denyIntent = Intent(this, FilterActionReceiver::class.java).apply {
+    //         putExtra("package_name", targetPackage)
+    //         putExtra("is_allowed", false)
+    //         putExtra("notification_id", notificationId)
+    //     }
+    //     val denyPending = PendingIntent.getBroadcast(this, notificationId * 2 + 1, denyIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        val builder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Novo aplicativo detectado")
-            .setContentText("Deseja capturar notificações do app $appName?")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .addAction(0, "Permitir", allowPending)
-            .addAction(0, "Bloquear", denyPending)
+    //     val builder = NotificationCompat.Builder(this, channelId)
+    //         .setSmallIcon(R.mipmap.ic_launcher)
+    //         .setContentTitle("Novo aplicativo detectado")
+    //         .setContentText("Deseja capturar notificações do app $appName?")
+    //         .setPriority(NotificationCompat.PRIORITY_HIGH)
+    //         .setAutoCancel(true)
+    //         .addAction(0, "Permitir", allowPending)
+    //         .addAction(0, "Bloquear", denyPending)
 
-        notificationManager.notify(notificationId, builder.build())
-    }
+    //     notificationManager.notify(notificationId, builder.build())
+    // }
 }
