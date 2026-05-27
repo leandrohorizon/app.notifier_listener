@@ -1,13 +1,42 @@
 package com.example.notificationlistener.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
+import androidx.room.RenameColumn
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.AutoMigrationSpec
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-@Database(entities = [NotificationEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        NotificationEntity::class, 
+        AppFilterEntity::class, 
+        KeywordEntity::class, 
+        MuteRuleEntity::class,
+        SavedFilterEntity::class
+    ],
+    version = 6,
+    autoMigrations = [
+        AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6, spec = AppDatabase.MyAutoMigration::class)
+    ],
+    exportSchema = true
+)
 abstract class AppDatabase : RoomDatabase() {
+    @RenameColumn(tableName = "saved_filters", fromColumnName = "query", toColumnName = "keyword_query")
+    @RenameColumn(tableName = "saved_filters", fromColumnName = "package_filter", toColumnName = "package_names")
+    class MyAutoMigration : AutoMigrationSpec
+
     abstract fun notificationDao(): NotificationDao
+    abstract fun appFilterDao(): AppFilterDao
+    abstract fun keywordDao(): KeywordDao
+    abstract fun muteRuleDao(): MuteRuleDao
+    abstract fun savedFilterDao(): SavedFilterDao
 
     companion object {
         @Volatile
@@ -21,7 +50,18 @@ abstract class AppDatabase : RoomDatabase() {
                     "notification_database"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                .fallbackToDestructiveMigration()
+                .addCallback(object : Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        val database = getDatabase(context)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val defaultKeywords = listOf("token", "chave", "senha", "2fa", "verification", "código", "otp", "code", "pix")
+                            defaultKeywords.forEach { word ->
+                                database.keywordDao().insert(KeywordEntity(word))
+                            }
+                        }
+                    }
+                })
                 .build()
                 INSTANCE = instance
                 instance

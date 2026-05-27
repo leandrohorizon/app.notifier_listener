@@ -19,11 +19,17 @@ interface NotificationDao {
 
     @Query("""
         SELECT * FROM notifications 
-        WHERE (:packageName IS NULL OR package_name = :packageName)
+        WHERE (:filterByPackage = 0 OR package_name IN (:packageNames))
         AND (title LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%')
+        AND (:isMuted IS NULL OR is_muted = :isMuted)
         ORDER BY created_at DESC
     """)
-    fun searchNotifications(query: String, packageName: String?): Flow<List<NotificationEntity>>
+    fun searchNotifications(
+        query: String, 
+        packageNames: List<String>, 
+        filterByPackage: Boolean, 
+        isMuted: Boolean?
+    ): Flow<List<NotificationEntity>>
 
     @Query("SELECT DISTINCT package_name FROM notifications")
     fun getDistinctPackagesFlow(): Flow<List<String>>

@@ -3,6 +3,7 @@ package com.example.notificationlistener.ui
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.notificationlistener.data.*
@@ -27,27 +28,106 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _filterPackage = MutableStateFlow<String?>(null)
     val filterPackage = _filterPackage.asStateFlow()
 
+    private val _showMutedOnly = MutableStateFlow(false)
+    val showMutedOnly = _showMutedOnly.asStateFlow()
+
+    private val _activePreset = MutableStateFlow<SavedFilterEntity?>(null)
+    val activePreset = _activePreset.asStateFlow()
+
+    private data class SearchParams(
+        val query: String,
+        val pkgs: List<String>,
+        val hasFilter: Boolean,
+        val muted: Boolean
+    )
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val pendingNotifications: Flow<List<NotificationEntity>> = combine(
         _searchQuery,
-        _filterPackage
-    ) { query, pkg ->
-        query to pkg
-    }.flatMapLatest { (query, pkg) ->
-        db.notificationDao().searchNotifications(query, pkg)
+        _filterPackage,
+        _showMutedOnly,
+        _activePreset
+    ) { query, pkg, mutedOnly, preset ->
+        val effectiveQuery = preset?.keyword_query ?: query
+        
+        val effectivePkgs = if (preset != null) {
+            preset.package_names?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+        } else {
+            pkg?.let { listOf(it) } ?: emptyList()
+        }
+        
+        val hasPackageFilter = effectivePkgs.isNotEmpty()
+        
+        SearchParams(effectiveQuery, effectivePkgs, hasPackageFilter, mutedOnly)
+    }.flatMapLatest { params ->
+        db.notificationDao().searchNotifications(
+            params.query, 
+            params.pkgs, 
+            params.hasFilter, 
+            if (params.muted) true else null
+        )
     }
 
     val distinctPackages: Flow<List<String>> = db.notificationDao().getDistinctPackagesFlow()
+    val savedFilters: Flow<List<SavedFilterEntity>> = db.savedFilterDao().getAllFiltersFlow()
+
+    val activeCount: Flow<Int> = db.notificationDao().getAllPendingFlow().map { list -> list.count { !it.is_muted } }
+    val mutedCount: Flow<Int> = db.notificationDao().getAllPendingFlow().map { list -> list.count { it.is_muted } }
 
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
 
+    val muteRules: Flow<List<MuteRuleEntity>> = db.muteRuleDao().getAllRulesFlow()
+
     fun setSearchQuery(query: String) {
+        _activePreset.value = null
         _searchQuery.value = query
     }
 
     fun setFilterPackage(pkg: String?) {
+        _activePreset.value = null
         _filterPackage.value = pkg
+    }
+
+    fun toggleMutedOnly() {
+        _showMutedOnly.value = !_showMutedOnly.value
+    }
+
+    fun setActivePreset(preset: SavedFilterEntity?) {
+        _activePreset.value = preset
+        if (preset == null) {
+            _searchQuery.value = ""
+            _filterPackage.value = null
+        }
+    }
+
+    fun saveCurrentFilter(name: String, packageNames: List<String>?, keyword: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val filter = SavedFilterEntity(
+                name = name,
+                package_names = packageNames?.joinToString(","),
+                keyword_query = keyword?.ifBlank { null }
+            )
+            db.savedFilterDao().insert(filter)
+            LogManager.addLog("Filtro '$name' salvo")
+        }
+    }
+
+    fun updateSavedFilter(filter: SavedFilterEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.savedFilterDao().insert(filter)
+            LogManager.addLog("Filtro '${filter.name}' atualizado")
+        }
+    }
+
+    fun deletePreset(preset: SavedFilterEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_activePreset.value?.id == preset.id) {
+                _activePreset.value = null
+            }
+            db.savedFilterDao().delete(preset)
+            LogManager.addLog("Filtro '${preset.name}' removido")
+        }
     }
 
     fun toggleSelection(id: Long) {
@@ -62,6 +142,75 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun clearSelection() {
         _selectedIds.value = emptySet()
+    }
+
+    fun addMuteRule(pkg: String, category: String?, channelId: String?, keyword: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.muteRuleDao().insert(MuteRuleEntity(
+                package_name = pkg, 
+                category = category, 
+                channel_id = channelId,
+                text_keyword = if (keyword.isNullOrBlank()) null else keyword.trim()
+            ))
+            LogManager.addLog("Regra de silenciamento criada para [$pkg]")
+        }
+    }
+
+    fun removeMuteRule(rule: MuteRuleEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.muteRuleDao().delete(rule)
+        }
+    }
+
+    fun addKeyword(word: String) {
+        if (word.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            db.keywordDao().insert(KeywordEntity(word.trim().lowercase()))
+        }
+    }
+
+    fun removeKeyword(word: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.keywordDao().deleteByWord(word)
+        }
+    }
+
+    fun updateAppFilter(packageName: String, isAllowed: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.appFilterDao().insert(AppFilterEntity(packageName, isAllowed))
+        }
+    }
+
+    fun removeAppFilter(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.appFilterDao().deleteByPackage(packageName)
+        }
+    }
+
+    private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
+
+    init {
+        loadInstalledApps()
+    }
+
+    private fun loadInstalledApps() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val pm = getApplication<Application>().packageManager
+            val apps = try {
+                // Using 0 as flag is safer/faster for just listing names and packages
+                pm.getInstalledApplications(0)
+                    .map {
+                        AppInfo(
+                            packageName = it.packageName,
+                            name = it.loadLabel(pm).toString()
+                        )
+                    }.sortedBy { it.name }
+            } catch (e: Exception) {
+                emptyList()
+            }
+            _installedApps.value = apps
+        }
     }
 
     fun getSyncUrl(): String = prefs.getString("sync_url", "") ?: ""
@@ -89,9 +238,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             val dao = db.notificationDao()
             var totalSynced = 0
             
-            // Se IDs forem fornecidos, sincroniza apenas eles. Caso contrário, sincroniza tudo via paginação.
             if (ids != null) {
-                // Sincronização de selecionados (simplificada para o exemplo)
                 val notifications = dao.getAllPendingFlow().first().filter { ids.contains(it.id) }
                 if (notifications.isNotEmpty()) {
                     val success = sendBatch(urlString, notifications)
@@ -104,7 +251,6 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
             } else {
-                // Comportamento padrão: Tudo
                 while (true) {
                     val batch = dao.getNextBatch(100)
                     if (batch.isEmpty()) break
@@ -146,3 +292,5 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 }
+
+data class AppInfo(val packageName: String, val name: String)

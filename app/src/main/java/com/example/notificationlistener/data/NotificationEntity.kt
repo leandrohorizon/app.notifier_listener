@@ -9,5 +9,8 @@ data class NotificationEntity(
     val package_name: String,
     val title: String,
     val content: String,
+    val category: String? = null,
+    val channel_id: String? = null,
+    val is_muted: Boolean = false,
     val created_at: Long
 )
