@@ -1,5 +1,6 @@
 package com.example.notificationlistener.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -41,9 +42,10 @@ fun MainScreen(viewModel: NotificationViewModel) {
     var filterToEdit by remember { mutableStateOf<SavedFilterEntity?>(null) }
     var showFilterEditor by remember { mutableStateOf(false) }
     var presetToDelete by remember { mutableStateOf<SavedFilterEntity?>(null) }
+    var filtersExpanded by remember { mutableStateOf(true) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Barra de Busca e Filtro
+        // 1. Barra de Busca e Filtro de App
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = searchQuery,
@@ -79,78 +81,47 @@ fun MainScreen(viewModel: NotificationViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Linha de Chips (Presets + Muted Toggle + Save)
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            item {
-                FilterChip(
-                    selected = activePreset == null,
-                    onClick = { viewModel.setActivePreset(null) },
-                    label = { Text("Todos") }
-                )
-            }
-
-            items(savedFilters) { filter ->
-                FilterChip(
-                    selected = activePreset?.id == filter.id,
-                    onClick = { viewModel.setActivePreset(filter) },
-                    label = { Text(filter.name) },
-                    modifier = Modifier.combinedClickable(
-                        onClick = { viewModel.setActivePreset(filter) },
-                        onLongClick = { presetToDelete = filter }
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { 
-                            filterToEdit = filter
-                            showFilterEditor = true
-                        }, modifier = Modifier.size(18.dp)) {
-                            Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(14.dp))
-                        }
-                    }
-                )
-            }
-
-            item {
-                IconButton(
-                    onClick = { 
-                        filterToEdit = null
-                        showFilterEditor = true 
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(Icons.Default.AddCircleOutline, contentDescription = "Novo Filtro")
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.width(4.dp))
-                FilterChip(
-                    selected = showMutedOnly,
-                    onClick = { viewModel.toggleMutedOnly() },
-                    label = { Text("Silenciados") },
-                    leadingIcon = {
-                        Icon(
-                            if (showMutedOnly) Icons.Default.NotificationsOff else Icons.Default.Notifications,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Ações em Lote
+        // 2. Linha de Controles (Toggle Presets, Silenciados e Lote)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Esquerda: Toggles de Visibilidade
             Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                    Icon(
+                        if (filtersExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.Tune,
+                        contentDescription = "Presets",
+                        tint = if (activePreset != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                    )
+                }
+                
+                FilterChip(
+                    selected = showMutedOnly,
+                    onClick = { viewModel.toggleMutedOnly() },
+                    label = { Text("Silenciados", style = MaterialTheme.typography.labelSmall) },
+                    leadingIcon = {
+                        Icon(
+                            if (showMutedOnly) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
+            }
+
+            // Direita: Controles de Lote
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectedIds.isNotEmpty()) {
+                    IconButton(onClick = { showSyncConfirm = true }) {
+                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    }
+                }
+                
                 Checkbox(
                     checked = pending.isNotEmpty() && selectedIds.size == pending.size,
                     onCheckedChange = { checked ->
@@ -158,28 +129,70 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         else viewModel.clearSelection()
                     }
                 )
-                Text("Tudo", style = MaterialTheme.typography.bodySmall)
-            }
-            
-            if (selectedIds.isNotEmpty()) {
-                Row {
-                    IconButton(onClick = { showSyncConfirm = true }) {
-                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
-                    }
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
+                Text("Tudo", style = MaterialTheme.typography.labelSmall)
             }
         }
 
+        // 3. Linha Animada de Filtros Salvos (Presets)
+        AnimatedVisibility(visible = filtersExpanded) {
+            Column {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item {
+                        FilterChip(
+                            selected = activePreset == null,
+                            onClick = { viewModel.setActivePreset(null) },
+                            label = { Text("Início") }
+                        )
+                    }
+
+                    items(savedFilters) { filter ->
+                        FilterChip(
+                            selected = activePreset?.id == filter.id,
+                            onClick = { viewModel.setActivePreset(filter) },
+                            label = { Text(filter.name) },
+                            modifier = Modifier.combinedClickable(
+                                onClick = { viewModel.setActivePreset(filter) },
+                                onLongClick = { presetToDelete = filter }
+                            ),
+                            trailingIcon = {
+                                IconButton(onClick = { 
+                                    filterToEdit = filter
+                                    showFilterEditor = true
+                                }, modifier = Modifier.size(18.dp)) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        )
+                    }
+
+                    item {
+                        IconButton(
+                            onClick = { 
+                                filterToEdit = null
+                                showFilterEditor = true 
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AddCircleOutline, contentDescription = "Novo Filtro", modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        // 4. Botão de Sincronização Principal
         Button(
             onClick = { if (selectedIds.isEmpty()) viewModel.syncNotifications() else showSyncConfirm = true },
             modifier = Modifier.fillMaxWidth(),
             enabled = pending.isNotEmpty()
         ) {
             val count = if (selectedIds.isEmpty()) pending.size else selectedIds.size
-            val label = if (selectedIds.isEmpty()) "Sincronizar Tudo" else "Sincronizar Selecionados"
+            val label = if (selectedIds.isEmpty()) "Sincronizar Todos" else "Sincronizar Selecionados"
             Text("$label ($count)")
         }
 

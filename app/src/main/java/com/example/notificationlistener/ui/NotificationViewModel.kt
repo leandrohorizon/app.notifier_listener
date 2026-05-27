@@ -194,13 +194,18 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.Default) {
             val pm = getApplication<Application>().packageManager
-            val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                .map {
-                    AppInfo(
-                        packageName = it.packageName,
-                        name = it.loadLabel(pm).toString()
-                    )
-                }.sortedBy { it.name }
+            val apps = try {
+                // Using 0 as flag is safer/faster for just listing names and packages
+                pm.getInstalledApplications(0)
+                    .map {
+                        AppInfo(
+                            packageName = it.packageName,
+                            name = it.loadLabel(pm).toString()
+                        )
+                    }.sortedBy { it.name }
+            } catch (e: Exception) {
+                emptyList()
+            }
             _installedApps.value = apps
         }
     }
