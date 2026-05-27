@@ -2,6 +2,7 @@ package com.example.notificationlistener.ui
 
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -140,8 +141,8 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         },
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E1E2A))
+//                            .clip(RoundedCornerShape(8.dp))
+//                            .background(Color(0xFF1E1E2A))
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                     }
@@ -160,49 +161,55 @@ fun MainScreen(viewModel: NotificationViewModel) {
                 )
             }
             
-            Spacer(modifier = Modifier.height(72.dp)) // Space for the bottom selection bar
+            AnimatedVisibility(visible = selectedIds.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(72.dp)) // Espaço apenas quando a barra flutuante aparece
+            }
         }
 
         // 6. Barra de Seleção Inferior (Flutuante acima da Nav)
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .height(56.dp),
-            color = Color(0xFF1A1A23),
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252535))
+        AnimatedVisibility(
+            visible = selectedIds.isNotEmpty(),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .height(56.dp),
+                color = Color(0xFF1A1A23),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252535))
             ) {
-                Checkbox(
-                    checked = pending.isNotEmpty() && selectedIds.size == pending.size,
-                    onCheckedChange = { checked ->
-                        if (checked) viewModel.selectAll(pending.map { it.id })
-                        else viewModel.clearSelection()
-                    },
-                    colors = CheckboxDefaults.colors(
-                        checkmarkColor = Color.White,
-                        checkedColor = Color(0xFF6C63FF),
-                        uncheckedColor = Color.Gray
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = pending.isNotEmpty() && selectedIds.size == pending.size,
+                        onCheckedChange = { checked ->
+                            if (checked) viewModel.selectAll(pending.map { it.id })
+                            else viewModel.clearSelection()
+                        },
+                        colors = CheckboxDefaults.colors(
+                            checkmarkColor = Color.White,
+                            checkedColor = Color(0xFF6C63FF),
+                            uncheckedColor = Color.Gray
+                        )
                     )
-                )
-                Text(
-                    text = if (selectedIds.isEmpty()) "Nenhuma selecionada" else "${selectedIds.size} selecionada(s)",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp)
-                )
-                
-                IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
-                    Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
-                }
-                
-                IconButton(onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = if (selectedIds.isNotEmpty()) Color(0xFFFF5252) else Color.Gray)
+                    Text(
+                        text = "${selectedIds.size} selecionada(s)",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp)
+                    )
+                    
+                    IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
+                        Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
+                    }
+                    
+                    IconButton(onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = Color(0xFFFF5252))
+                    }
                 }
             }
         }
@@ -432,10 +439,16 @@ fun NotificationCard(
         }
     }
 
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) Color(0xFF252538) else Color(0xFF1A1A23),
+        label = "backgroundColor"
+    )
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF1A1A23),
+        color = backgroundColor,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6C63FF)) else null,
         onClick = onToggleSelect
     ) {
         Row(
