@@ -55,72 +55,68 @@ fun MainScreen(viewModel: NotificationViewModel) {
     var showFilterEditor by remember { mutableStateOf(false) }
     var presetToDelete by remember { mutableStateOf<SavedFilterEntity?>(null) }
 
-    Column(modifier = Modifier
+    Box(modifier = Modifier
         .fillMaxSize()
         .background(Color(0xFF0F0F17))
-        .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // 1. Barra de Busca
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { viewModel.setSearchQuery(it) },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Pesquisar notificações...", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
-            trailingIcon = { Icon(Icons.Default.FilterList, contentDescription = null, tint = Color.Gray) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = Color(0xFF1E1E2A),
-                focusedBorderColor = Color(0xFF6C63FF),
-                unfocusedContainerColor = Color(0xFF1E1E2A),
-                focusedContainerColor = Color(0xFF1E1E2A),
-                cursorColor = Color.White,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            )
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 2. Tabs: Ativas / Silenciadas
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TabButton(
-                label = "Ativas",
-                count = activeCount,
-                selected = !showMutedOnly,
-                icon = Icons.Default.FlashOn,
-                onClick = { if (showMutedOnly) viewModel.toggleMutedOnly() },
-                modifier = Modifier.weight(1f)
-            )
-            TabButton(
-                label = "Silenciadas",
-                count = mutedCount,
-                selected = showMutedOnly,
-                icon = Icons.Default.NotificationsOff,
-                onClick = { if (!showMutedOnly) viewModel.toggleMutedOnly() },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 3. Filtros e Seleção
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // 1. Barra de Busca
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Pesquisar notificações...", color = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color(0xFF1E1E2A),
+                    focusedBorderColor = Color(0xFF6C63FF),
+                    unfocusedContainerColor = Color(0xFF1E1E2A),
+                    focusedContainerColor = Color(0xFF1E1E2A),
+                    cursorColor = Color.White,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. Tabs: Ativas / Silenciadas
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TabButton(
+                    label = "Ativas",
+                    count = activeCount,
+                    selected = !showMutedOnly,
+                    icon = Icons.Default.FlashOn,
+                    onClick = { if (showMutedOnly) viewModel.toggleMutedOnly() },
+                    modifier = Modifier.weight(1f)
+                )
+                TabButton(
+                    label = "Silenciadas",
+                    count = mutedCount,
+                    selected = showMutedOnly,
+                    icon = Icons.Default.NotificationsOff,
+                    onClick = { if (!showMutedOnly) viewModel.toggleMutedOnly() },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 3. Filtros Horizontais
             LazyRow(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 item {
                     FilterChipSmall(
-                        label = "Todos",
+                        label = "Todas",
                         selected = activePreset == null,
-                        icon = Icons.Default.GridView,
                         onClick = { viewModel.setActivePreset(null) }
                     )
                 }
@@ -128,7 +124,6 @@ fun MainScreen(viewModel: NotificationViewModel) {
                     FilterChipSmall(
                         label = filter.name,
                         selected = activePreset?.id == filter.id,
-                        icon = Icons.Default.Person,
                         onClick = { viewModel.setActivePreset(filter) },
                         onLongClick = { presetToDelete = filter },
                         onEditClick = {
@@ -153,15 +148,35 @@ fun MainScreen(viewModel: NotificationViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Controle de Seleção e Delete
+            // 5. Lista de Notificações
+            Box(modifier = Modifier.weight(1f)) {
+                PendingList(
+                    notifications = pending,
+                    selectedIds = selectedIds,
+                    onToggleSelect = { viewModel.toggleSelection(it) },
+                    onMuteClick = { muteCandidate = it }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(72.dp)) // Space for the bottom selection bar
+        }
+
+        // 6. Barra de Seleção Inferior (Flutuante acima da Nav)
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .height(56.dp),
+            color = Color(0xFF1A1A23),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252535))
+        ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1E2A))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
                     checked = pending.isNotEmpty() && selectedIds.size == pending.size,
@@ -175,48 +190,22 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         uncheckedColor = Color.Gray
                     )
                 )
-                Text("Selecionar", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    text = if (selectedIds.isEmpty()) "Nenhuma selecionada" else "${selectedIds.size} selecionada(s)",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp)
+                )
                 
-                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
+                    Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
+                }
                 
-                IconButton(
-                    onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (selectedIds.isNotEmpty()) Color(0x33FF5252) else Color.Transparent)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = if (selectedIds.isNotEmpty()) Color(0xFFFF5252) else Color.Gray, modifier = Modifier.size(18.dp))
+                IconButton(onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = if (selectedIds.isNotEmpty()) Color(0xFFFF5252) else Color.Gray)
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 4. Botão de Sincronia
-        if (pending.isNotEmpty()) {
-            val label = if (selectedIds.isEmpty()) "Sincronizar tudo" else "Sincronizar selecionados (${selectedIds.size})"
-            Button(
-                onClick = { showSyncConfirm = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C63FF))
-            ) {
-                Icon(Icons.Outlined.CloudUpload, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(label, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // 5. Lista de Notificações
-        PendingList(
-            notifications = pending,
-            selectedIds = selectedIds,
-            onToggleSelect = { viewModel.toggleSelection(it) },
-            onMuteClick = { muteCandidate = it }
-        )
     }
 
     // Dialogs
@@ -367,7 +356,6 @@ fun TabButton(
 fun FilterChipSmall(
     label: String,
     selected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onEditClick: (() -> Unit)? = null
@@ -385,7 +373,7 @@ fun FilterChipSmall(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp)
+            modifier = Modifier.padding(horizontal = 12.dp)
         ) {
             Text(label, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (onEditClick != null && selected) {
@@ -501,16 +489,12 @@ fun NotificationCard(
             Column(horizontalAlignment = Alignment.End) {
                 IconButton(onClick = onMuteClick, modifier = Modifier.size(28.dp)) {
                     Icon(
-                        if (item.is_muted) Icons.Default.NotificationsOff else Icons.Default.NotificationsOff,
+                        Icons.Default.NotificationsOff,
                         contentDescription = null,
                         tint = if (item.is_muted) Color(0xFFFF5252) else Color(0xFF353545),
                         modifier = Modifier.size(18.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-//                IconButton(onClick = {}, modifier = Modifier.size(28.dp)) {
-//                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-//                }
             }
         }
     }
@@ -581,15 +565,13 @@ fun PreviewTabButtons() {
 fun PreviewFilterChips() {
     Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChipSmall(
-            label = "Todos",
+            label = "Todas",
             selected = false,
-            icon = Icons.Default.GridView,
             onClick = {}
         )
         FilterChipSmall(
             label = "Social",
             selected = true,
-            icon = Icons.Default.Person,
             onClick = {}
         )
     }
