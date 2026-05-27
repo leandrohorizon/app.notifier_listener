@@ -1,6 +1,7 @@
 package com.example.notificationlistener.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -14,10 +15,14 @@ import kotlinx.coroutines.launch
         NotificationEntity::class, 
         AppFilterEntity::class, 
         KeywordEntity::class, 
-        MuteRuleEntity::class
+        MuteRuleEntity::class,
+        SavedFilterEntity::class
     ],
-    version = 4,
-    exportSchema = false
+    version = 5,
+    autoMigrations = [
+        AutoMigration(from = 4, to = 5)
+    ],
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
@@ -37,7 +42,6 @@ abstract class AppDatabase : RoomDatabase() {
                     "notification_database"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
