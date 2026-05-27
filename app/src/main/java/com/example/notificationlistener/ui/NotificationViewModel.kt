@@ -3,6 +3,7 @@ package com.example.notificationlistener.ui
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.notificationlistener.data.*
@@ -42,6 +43,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
 
+    val muteRules: Flow<List<MuteRuleEntity>> = db.muteRuleDao().getAllRulesFlow()
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -62,6 +65,70 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun clearSelection() {
         _selectedIds.value = emptySet()
+    }
+
+    fun addMuteRule(pkg: String, category: String?, channelId: String?, keyword: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.muteRuleDao().insert(MuteRuleEntity(
+                package_name = pkg, 
+                category = category, 
+                channel_id = channelId,
+                text_keyword = if (keyword.isNullOrBlank()) null else keyword.trim()
+            ))
+            LogManager.addLog("Regra de silenciamento criada para [$pkg]${if (keyword != null) " (Termo: $keyword)" else ""}")
+        }
+    }
+
+    fun removeMuteRule(rule: MuteRuleEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.muteRuleDao().delete(rule)
+        }
+    }
+
+    fun addKeyword(word: String) {
+        if (word.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            db.keywordDao().insert(KeywordEntity(word.trim().lowercase()))
+        }
+    }
+
+    fun removeKeyword(word: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.keywordDao().deleteByWord(word)
+        }
+    }
+
+    fun updateAppFilter(packageName: String, isAllowed: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.appFilterDao().insert(AppFilterEntity(packageName, isAllowed))
+        }
+    }
+
+    fun removeAppFilter(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.appFilterDao().deleteByPackage(packageName)
+        }
+    }
+
+    private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
+
+    init {
+        loadInstalledApps()
+    }
+
+    private fun loadInstalledApps() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val pm = getApplication<Application>().packageManager
+            val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .map {
+                    AppInfo(
+                        packageName = it.packageName,
+                        name = it.loadLabel(pm).toString()
+                    )
+                }.sortedBy { it.name }
+            _installedApps.value = apps
+        }
     }
 
     fun getSyncUrl(): String = prefs.getString("sync_url", "") ?: ""
@@ -89,9 +156,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             val dao = db.notificationDao()
             var totalSynced = 0
             
-            // Se IDs forem fornecidos, sincroniza apenas eles. Caso contrário, sincroniza tudo via paginação.
             if (ids != null) {
-                // Sincronização de selecionados (simplificada para o exemplo)
                 val notifications = dao.getAllPendingFlow().first().filter { ids.contains(it.id) }
                 if (notifications.isNotEmpty()) {
                     val success = sendBatch(urlString, notifications)
@@ -104,7 +169,6 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
             } else {
-                // Comportamento padrão: Tudo
                 while (true) {
                     val batch = dao.getNextBatch(100)
                     if (batch.isEmpty()) break
@@ -146,3 +210,5 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 }
+
+data class AppInfo(val packageName: String, val name: String)

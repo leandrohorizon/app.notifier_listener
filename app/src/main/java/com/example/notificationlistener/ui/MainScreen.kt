@@ -4,10 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +27,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
     var showFilterMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSyncConfirm by remember { mutableStateOf(false) }
+    var muteCandidate by remember { mutableStateOf<NotificationEntity?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Barra de Busca e Filtro
@@ -114,7 +112,8 @@ fun MainScreen(viewModel: NotificationViewModel) {
             PendingList(
                 notifications = pending,
                 selectedIds = selectedIds,
-                onToggleSelect = { viewModel.toggleSelection(it) }
+                onToggleSelect = { viewModel.toggleSelection(it) },
+                onMuteClick = { muteCandidate = it }
             )
         }
     }
@@ -124,7 +123,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Confirmar Exclusão") },
-            text = { Text("Tem certeza que deseja apagar as ${selectedIds.size} notificações selecionadas? Esta ação é irreversível.") },
+            text = { Text("Tem certeza que deseja apagar as ${selectedIds.size} notificações selecionadas?") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteNotifications(selectedIds.toList())
@@ -143,7 +142,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
         AlertDialog(
             onDismissRequest = { showSyncConfirm = false },
             title = { Text("Iniciar Sincronização") },
-            text = { Text("Deseja enviar as ${selectedIds.size} notificações selecionadas para o servidor agora?") },
+            text = { Text("Deseja enviar as ${selectedIds.size} notificações selecionadas?") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.syncNotifications(selectedIds.toList())
@@ -157,13 +156,65 @@ fun MainScreen(viewModel: NotificationViewModel) {
             }
         )
     }
+
+    muteCandidate?.let { candidate ->
+        var muteScope by remember { mutableIntStateOf(0) } // 0: Canal, 1: Com Termo
+        var keyword by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { muteCandidate = null },
+            title = { Text("Silenciar Notificações") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Escolha como silenciar notificações do canal '${candidate.channel_id}':")
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = muteScope == 0, onClick = { muteScope = 0 })
+                        Text("Silenciar tudo neste canal", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = muteScope == 1, onClick = { muteScope = 1 })
+                        Text("Silenciar apenas se contiver termo", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    if (muteScope == 1) {
+                        OutlinedTextField(
+                            value = keyword,
+                            onValueChange = { keyword = it },
+                            label = { Text("Palavra-chave (ex: reels, cupom)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.addMuteRule(
+                        pkg = candidate.package_name,
+                        category = candidate.category,
+                        channelId = candidate.channel_id,
+                        keyword = if (muteScope == 1) keyword else null
+                    )
+                    muteCandidate = null
+                }) {
+                    Text("Silenciar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { muteCandidate = null }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
 fun PendingList(
     notifications: List<NotificationEntity>, 
     selectedIds: Set<Long>,
-    onToggleSelect: (Long) -> Unit
+    onToggleSelect: (Long) -> Unit,
+    onMuteClick: (NotificationEntity) -> Unit
 ) {
     if (notifications.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -180,7 +231,8 @@ fun PendingList(
                     item = item, 
                     time = sdf.format(Date(item.created_at)),
                     isSelected = selectedIds.contains(item.id),
-                    onToggleSelect = { onToggleSelect(item.id) }
+                    onToggleSelect = { onToggleSelect(item.id) },
+                    onMuteClick = { onMuteClick(item) }
                 )
             }
         }
@@ -192,19 +244,58 @@ fun PendingItem(
     item: NotificationEntity, 
     time: String, 
     isSelected: Boolean,
-    onToggleSelect: () -> Unit
+    onToggleSelect: () -> Unit,
+    onMuteClick: () -> Unit
 ) {
+    val backgroundColor = if (item.is_muted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
         
-        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-            Text(text = item.package_name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-            Text(text = item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            Text(text = item.content, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = item.package_name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                if (item.is_muted) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Badge(containerColor = MaterialTheme.colorScheme.errorContainer) {
+                        Text("SILENCIADO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+            
+            Text(
+                text = item.title, 
+                style = MaterialTheme.typography.bodyLarge, 
+                fontWeight = FontWeight.Bold,
+                color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = item.content, 
+                style = MaterialTheme.typography.bodyMedium, 
+                maxLines = 2,
+                color = if (item.is_muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface
+            )
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!item.category.isNullOrEmpty()) {
+                    Badge { Text(item.category, style = MaterialTheme.typography.labelSmall) }
+                }
+                if (!item.channel_id.isNullOrEmpty()) {
+                    Badge(containerColor = MaterialTheme.colorScheme.tertiaryContainer) { 
+                        Text(item.channel_id, style = MaterialTheme.typography.labelSmall) 
+                    }
+                }
+            }
             Text(text = time, style = MaterialTheme.typography.labelSmall)
+        }
+
+        IconButton(onClick = onMuteClick) {
+            Icon(Icons.Default.NotificationsOff, contentDescription = "Silenciar", tint = MaterialTheme.colorScheme.outline)
         }
     }
 }

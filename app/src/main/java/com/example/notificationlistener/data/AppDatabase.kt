@@ -4,10 +4,26 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-@Database(entities = [NotificationEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        NotificationEntity::class, 
+        AppFilterEntity::class, 
+        KeywordEntity::class, 
+        MuteRuleEntity::class
+    ],
+    version = 4,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
+    abstract fun appFilterDao(): AppFilterDao
+    abstract fun keywordDao(): KeywordDao
+    abstract fun muteRuleDao(): MuteRuleDao
 
     companion object {
         @Volatile
@@ -22,6 +38,18 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .fallbackToDestructiveMigration()
+                .addCallback(object : Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        val database = getDatabase(context)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val defaultKeywords = listOf("token", "chave", "senha", "2fa", "verification", "código", "otp", "code", "pix")
+                            defaultKeywords.forEach { word ->
+                                database.keywordDao().insert(KeywordEntity(word))
+                            }
+                        }
+                    }
+                })
                 .build()
                 INSTANCE = instance
                 instance

@@ -8,6 +8,8 @@ data class NotificationDto(
     val package_name: String,
     val title: String,
     val content: String,
+    val category: String?,
+    val channel_id: String?,
     val created_at: Long
 )
 
@@ -16,5 +18,7 @@ fun NotificationEntity.toDto() = NotificationDto(
     package_name = package_name,
     title = title,
     content = content,
+    category = category,
+    channel_id = channel_id,
     created_at = created_at
 )
