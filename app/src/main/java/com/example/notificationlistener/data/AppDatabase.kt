@@ -22,13 +22,14 @@ import kotlinx.coroutines.launch
         MuteRuleEntity::class,
         SavedFilterEntity::class
     ],
-    version = 9,
+    version = 10,
     autoMigrations = [
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6, spec = AppDatabase.MyAutoMigration::class),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
-        AutoMigration(from = 8, to = 9, spec = AppDatabase.DeleteKeywordQuerySpec::class)
+        AutoMigration(from = 8, to = 9, spec = AppDatabase.DeleteKeywordQuerySpec::class),
+        AutoMigration(from = 9, to = 10, spec = AppDatabase.MuteMigrationSpec::class)
     ],
     exportSchema = true
 )
@@ -40,6 +41,11 @@ abstract class AppDatabase : RoomDatabase() {
 
     @DeleteColumn(tableName = "saved_filters", columnName = "keyword_query")
     class DeleteKeywordQuerySpec : AutoMigrationSpec
+
+    @RenameColumn(tableName = "mute_rules", fromColumnName = "text_keyword", toColumnName = "keywords_to_mute")
+    @DeleteColumn(tableName = "mute_rules", columnName = "category")
+    @DeleteColumn(tableName = "mute_rules", columnName = "channel_id")
+    class MuteMigrationSpec : AutoMigrationSpec
 
     abstract fun notificationDao(): NotificationDao
     abstract fun appFilterDao(): AppFilterDao

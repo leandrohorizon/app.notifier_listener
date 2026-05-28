@@ -6,8 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "mute_rules")
 data class MuteRuleEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val package_name: String,
-    val category: String?,
-    val channel_id: String?,
-    val text_keyword: String? = null
+    val package_name: String?,
+    val keywords_to_mute: List<String>? = emptyList(),
+    val keywords_to_bypass: List<String>? = emptyList()
 )

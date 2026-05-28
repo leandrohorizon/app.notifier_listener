@@ -310,7 +310,8 @@ fun MainScreen(viewModel: NotificationViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.addMuteRule(candidate.package_name, candidate.category, candidate.channel_id, if (muteScope == 1) keyword else null)
+                    val muteTags = if (muteScope == 1 && keyword.isNotBlank()) listOf(keyword) else emptyList()
+                    viewModel.addMuteRule(candidate.package_name, muteTags)
                     muteCandidate = null
                 }) { Text("Silenciar", color = MaterialTheme.colorScheme.error) }
             },
@@ -512,14 +513,14 @@ fun NotificationCard(
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (!item.category.isNullOrEmpty()) {
-                        BadgeBadge(item.category, Color(0xFF352B35))
-                    }
-                    if (!item.channel_id.isNullOrEmpty()) {
-                        BadgeBadge(item.channel_id, Color(0xFF2B2B3D))
-                    }
-                }
+//                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+//                    if (!item.category.isNullOrEmpty()) {
+//                        BadgeBadge(item.category, Color(0xFF352B35))
+//                    }
+//                    if (!item.channel_id.isNullOrEmpty()) {
+//                        BadgeBadge(item.channel_id, Color(0xFF2B2B3D))
+//                    }
+//                }
                 
                 Text(text = time, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
             }
@@ -534,14 +535,14 @@ fun NotificationCard(
                         modifier = Modifier.size(18.dp)
                     )
                 }
-                IconButton(onClick = onMuteClick, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.NotificationsOff,
-                        contentDescription = null,
-                        tint = if (item.is_muted) Color(0xFFFF5252) else Color(0xFF353545),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+//                IconButton(onClick = onMuteClick, modifier = Modifier.size(28.dp)) {
+//                    Icon(
+//                        Icons.Default.NotificationsOff,
+//                        contentDescription = null,
+//                        tint = if (item.is_muted) Color(0xFFFF5252) else Color(0xFF353545),
+//                        modifier = Modifier.size(18.dp)
+//                    )
+//                }
             }
         }
     }

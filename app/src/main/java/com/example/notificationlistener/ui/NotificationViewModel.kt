@@ -184,15 +184,21 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         _selectedIds.value = emptySet()
     }
 
-    fun addMuteRule(pkg: String, category: String?, channelId: String?, keyword: String? = null) {
+    fun addMuteRule(pkg: String?, muteTags: List<String> = emptyList(), bypassTags: List<String> = emptyList()) {
         viewModelScope.launch(Dispatchers.IO) {
             db.muteRuleDao().insert(MuteRuleEntity(
                 package_name = pkg, 
-                category = category, 
-                channel_id = channelId,
-                text_keyword = if (keyword.isNullOrBlank()) null else keyword.trim()
+                keywords_to_mute = muteTags,
+                keywords_to_bypass = bypassTags
             ))
-            LogManager.addLog("Regra de silenciamento criada para [$pkg]")
+            LogManager.addLog("Regra de silenciamento criada")
+        }
+    }
+
+    fun updateMuteRule(rule: MuteRuleEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.muteRuleDao().insert(rule)
+            LogManager.addLog("Regra de silenciamento atualizada")
         }
     }
 

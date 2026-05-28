@@ -53,7 +53,6 @@ class NotificationListener : NotificationListenerService() {
 
             // // 1. Keyword Filter (High Priority - Skip saving if hits globally)
             // val keywords = db.keywordDao().getAllKeywords().map { it.word.lowercase() }
-             val fullContent = (title + " " + text).lowercase()
             // if (keywords.any { fullContent.contains(it) }) {
             //     LogManager.addLog("Ignorada por palavra-chave global: [$packageName]")
             //     return@launch
@@ -82,11 +81,40 @@ class NotificationListener : NotificationListenerService() {
 
             // 3. Mute Rules Logic - SALVA PRIMEIRO
             val muteRules = db.muteRuleDao().getAllRules()
+
+            fun String.normalizeText(): String {
+                val nfd = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+                return nfd.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            }
+
+            val normFullContent = (title + " " + text).normalizeText().lowercase()
+
             val isMuted = muteRules.any { rule ->
-                rule.package_name == packageName &&
-                (rule.category == null || rule.category == category) &&
-                (rule.channel_id == null || rule.channel_id == channelId) &&
-                (rule.text_keyword == null || fullContent.contains(rule.text_keyword.lowercase()))
+                // 1. Se (package_name preenchido AND sbn.packageName != package_name) -> NÃO muta (Ignora a regra)
+                if (!rule.package_name.isNullOrBlank() && rule.package_name != packageName) return@any false
+
+                // 2. Se (keywords_to_mute não estiver vazia AND texto da notificação NÃO der match com nenhuma tag de mute via REGEXP) -> NÃO muta
+                val muteTags = rule.keywords_to_mute ?: emptyList()
+                if (muteTags.isNotEmpty()) {
+                    val hasMuteMatch = muteTags.any { tag ->
+                        val regex = Regex(".*${Regex.escape(tag.normalizeText())}.*", RegexOption.IGNORE_CASE)
+                        regex.containsMatchIn(normFullContent)
+                    }
+                    if (!hasMuteMatch) return@any false
+                }
+
+                // 3. Se (keywords_to_bypass não estiver vazia AND texto da notificação DER match com alguma tag de bypass) -> NÃO muta (A exceção anula o bloqueio)
+                val bypassTags = rule.keywords_to_bypass ?: emptyList()
+                if (bypassTags.isNotEmpty()) {
+                    val hasBypassMatch = bypassTags.any { tag ->
+                        val regex = Regex(".*${Regex.escape(tag.normalizeText())}.*", RegexOption.IGNORE_CASE)
+                        regex.containsMatchIn(normFullContent)
+                    }
+                    if (hasBypassMatch) return@any false
+                }
+
+                // 4. Caso contrário -> MUTA imediatamente
+                true
             }
 
             val metadataBuilder = StringBuilder()
