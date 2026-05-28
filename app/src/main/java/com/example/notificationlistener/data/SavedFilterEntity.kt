@@ -8,5 +8,5 @@ data class SavedFilterEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
     val package_names: String?, // comma separated
-    val keyword_query: String?
+    val keyword_list: List<String>? = emptyList()
 )

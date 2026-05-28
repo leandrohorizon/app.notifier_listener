@@ -38,7 +38,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         val query: String,
         val pkgs: List<String>,
         val hasFilter: Boolean,
-        val muted: Boolean
+        val muted: Boolean,
+        val regex: String? = null
     )
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -48,8 +49,6 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         _showMutedOnly,
         _activePreset
     ) { query, pkg, mutedOnly, preset ->
-        val effectiveQuery = preset?.keyword_query ?: query
-        
         val effectivePkgs = if (preset != null) {
             preset.package_names?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
         } else {
@@ -57,15 +56,29 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
         
         val hasPackageFilter = effectivePkgs.isNotEmpty()
+
+        val regex = preset?.keyword_list?.let { list ->
+            if (list.isNotEmpty()) {
+                ".*(" + list.joinToString("|") { Regex.escape(it) } + ").*"
+            } else null
+        }
         
-        SearchParams(effectiveQuery, effectivePkgs, hasPackageFilter, mutedOnly)
+        SearchParams(query, effectivePkgs, hasPackageFilter, mutedOnly, regex)
     }.flatMapLatest { params ->
         db.notificationDao().searchNotifications(
             params.query, 
             params.pkgs, 
             params.hasFilter, 
             if (params.muted) true else null
-        )
+        ).map { list ->
+            val regexStr = params.regex
+            if (regexStr != null) {
+                val r = Regex(regexStr, RegexOption.IGNORE_CASE)
+                list.filter { r.containsMatchIn("${it.title} ${it.content}") }
+            } else {
+                list
+            }
+        }
     }
 
     val distinctPackages: Flow<List<String>> = db.notificationDao().getDistinctPackagesFlow()
@@ -101,12 +114,12 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun saveCurrentFilter(name: String, packageNames: List<String>?, keyword: String?) {
+    fun saveCurrentFilter(name: String, packageNames: List<String>?, keywordList: List<String> = emptyList()) {
         viewModelScope.launch(Dispatchers.IO) {
             val filter = SavedFilterEntity(
                 name = name,
                 package_names = packageNames?.joinToString(","),
-                keyword_query = keyword?.ifBlank { null }
+                keyword_list = keywordList
             )
             db.savedFilterDao().insert(filter)
             LogManager.addLog("Filtro '$name' salvo")

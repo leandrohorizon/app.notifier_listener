@@ -24,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -129,8 +132,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         label = filter.name,
                         selected = activePreset?.id == filter.id,
                         onClick = { viewModel.setActivePreset(filter) },
-                        onLongClick = { presetToDelete = filter },
-                        onEditClick = {
+                        onLongClick = {
                             filterToEdit = filter
                             showFilterEditor = true
                         }
@@ -223,9 +225,13 @@ fun MainScreen(viewModel: NotificationViewModel) {
             filter = filterToEdit,
             installedApps = installedApps,
             onDismiss = { showFilterEditor = false },
-            onSave = { name: String, pkgs: List<String>, keyword: String? ->
-                if (filterToEdit == null) viewModel.saveCurrentFilter(name, pkgs, keyword)
-                else viewModel.updateSavedFilter(filterToEdit!!.copy(name = name, package_names = pkgs.joinToString(","), keyword_query = keyword))
+            onSave = { name: String, pkgs: List<String>, keywordList: List<String> ->
+                if (filterToEdit == null) viewModel.saveCurrentFilter(name, pkgs, keywordList)
+                else viewModel.updateSavedFilter(filterToEdit!!.copy(
+                    name = name, 
+                    package_names = pkgs.joinToString(","), 
+                    keyword_list = keywordList
+                ))
                 showFilterEditor = false
             },
             onDelete = {
@@ -387,8 +393,7 @@ fun FilterChipSmall(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    onEditClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null
 ) {
     val backgroundColor = if (selected) Color(0x226C63FF) else Color(0xFF1E1E2A)
     val contentColor = if (selected) Color(0xFF6C63FF) else Color.White
@@ -403,14 +408,9 @@ fun FilterChipSmall(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp)
+            modifier = Modifier.padding(horizontal = 16.dp)
         ) {
             Text(label, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            if (onEditClick != null && selected) {
-                IconButton(onClick = onEditClick, modifier = Modifier.size(20.dp)) {
-                    Icon(Icons.Default.Edit, null, tint = contentColor, modifier = Modifier.size(12.dp))
-                }
-            }
         }
     }
 }
@@ -625,18 +625,19 @@ fun PreviewFilterChips() {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FilterEditorDialog(
     filter: SavedFilterEntity?,
     installedApps: List<AppInfo>,
     onDismiss: () -> Unit,
-    onSave: (String, List<String>, String?) -> Unit,
+    onSave: (String, List<String>, List<String>) -> Unit,
     onDelete: () -> Unit
 ) {
     var name by remember { mutableStateOf(filter?.name ?: "") }
     var selectedPkgs by remember { mutableStateOf(filter?.package_names?.split(",")?.filter { it.isNotBlank() } ?: emptyList()) }
-    var keyword by remember { mutableStateOf(filter?.keyword_query ?: "") }
+    var keywordList by remember { mutableStateOf(filter?.keyword_list ?: emptyList()) }
+    var tagInput by remember { mutableStateOf("") }
     var appSearch by remember { mutableStateOf("") }
 
     val filteredApps = remember(appSearch, installedApps) {
@@ -664,16 +665,71 @@ fun FilterEditorDialog(
                 )
                 
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
+                // Tags Section
+                Text("Tags de busca", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
                 OutlinedTextField(
-                    value = keyword,
-                    onValueChange = { keyword = it },
-                    label = { Text("Palavra-chave (opcional)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    value = tagInput,
+                    onValueChange = { tagInput = it },
+                    label = { Text("Adicionar tag...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onKeyEvent { 
+                            if (it.key == Key.Enter && tagInput.isNotBlank()) {
+                                if (!keywordList.contains(tagInput.trim())) {
+                                    keywordList = keywordList + tagInput.trim()
+                                }
+                                tagInput = ""
+                                true
+                            } else false
+                        },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            if (tagInput.isNotBlank()) {
+                                if (!keywordList.contains(tagInput.trim())) {
+                                    keywordList = keywordList + tagInput.trim()
+                                }
+                                tagInput = ""
+                            }
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF6C63FF))
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
 
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    keywordList.forEach { tag ->
+                        InputChip(
+                            selected = true,
+                            onClick = {},
+                            label = { Text(tag) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp).combinedClickable {
+                                        keywordList = keywordList - tag
+                                    }
+                                )
+                            },
+                            colors = InputChipDefaults.inputChipColors(
+                                selectedContainerColor = Color(0xFF252538),
+                                selectedLabelColor = Color.White
+                            ),
+                            border = InputChipDefaults.inputChipBorder(
+                                enabled = true,
+                                selected = true,
+                                selectedBorderColor = Color(0xFF6C63FF)
+                            )
+                        )
+                    }
+                }
+                
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Selecionar Aplicativos (${selectedPkgs.size})", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
                 
@@ -727,7 +783,7 @@ fun FilterEditorDialog(
                         TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.Gray) }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
-                            onClick = { onSave(name, selectedPkgs, keyword.ifBlank { null }) },
+                            onClick = { onSave(name, selectedPkgs, keywordList) },
                             enabled = name.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C63FF))
                         ) { Text("Salvar") }
