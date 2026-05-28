@@ -141,8 +141,6 @@ fun MainScreen(viewModel: NotificationViewModel) {
                         },
                         modifier = Modifier
                             .size(36.dp)
-//                            .clip(RoundedCornerShape(8.dp))
-//                            .background(Color(0xFF1E1E2A))
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                     }
