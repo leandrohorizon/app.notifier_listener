@@ -89,6 +89,18 @@ class NotificationListener : NotificationListenerService() {
                 (rule.text_keyword == null || fullContent.contains(rule.text_keyword.lowercase()))
             }
 
+            val metadataBuilder = StringBuilder()
+            metadataBuilder.append("KEY: ${it.key}\n")
+            metadataBuilder.append("CHANNEL_ID: ${it.notification.channelId}\n")
+            metadataBuilder.append("CATEGORY: ${it.notification.category}\n")
+            metadataBuilder.append("POST_TIME: ${it.postTime}\n\n--- EXTRAS ---\n")
+            val extrasSet = it.notification.extras.keySet()
+            for (key in extrasSet) {
+                val value = it.notification.extras.get(key)
+                metadataBuilder.append("$key: $value\n")
+            }
+            val metadataString = metadataBuilder.toString()
+
             val entity = NotificationEntity(
                 package_name = packageName,
                 title = title,
@@ -96,7 +108,8 @@ class NotificationListener : NotificationListenerService() {
                 category = category,
                 channel_id = channelId,
                 is_muted = isMuted,
-                created_at = System.currentTimeMillis()
+                created_at = System.currentTimeMillis(),
+                raw_metadata = metadataString
             )
 
             db.notificationDao().insert(entity)

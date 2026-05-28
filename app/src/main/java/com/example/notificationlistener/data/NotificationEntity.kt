@@ -12,5 +12,6 @@ data class NotificationEntity(
     val category: String? = null,
     val channel_id: String? = null,
     val is_muted: Boolean = false,
-    val created_at: Long
+    val created_at: Long,
+    val raw_metadata: String? = null
 )

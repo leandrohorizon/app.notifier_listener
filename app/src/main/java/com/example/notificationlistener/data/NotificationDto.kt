@@ -10,7 +10,8 @@ data class NotificationDto(
     val content: String,
     val category: String?,
     val channel_id: String?,
-    val created_at: Long
+    val created_at: Long,
+    val raw_metadata: String? = null
 )
 
 fun NotificationEntity.toDto() = NotificationDto(
@@ -20,5 +21,6 @@ fun NotificationEntity.toDto() = NotificationDto(
     content = content,
     category = category,
     channel_id = channel_id,
-    created_at = created_at
+    created_at = created_at,
+    raw_metadata = raw_metadata
 )

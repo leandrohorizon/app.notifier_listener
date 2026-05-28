@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -51,6 +53,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSyncConfirm by remember { mutableStateOf(false) }
     var muteCandidate by remember { mutableStateOf<NotificationEntity?>(null) }
+    var inspectionCandidate by remember { mutableStateOf<NotificationEntity?>(null) }
     
     var filterToEdit by remember { mutableStateOf<SavedFilterEntity?>(null) }
     var showFilterEditor by remember { mutableStateOf(false) }
@@ -155,7 +158,8 @@ fun MainScreen(viewModel: NotificationViewModel) {
                     notifications = pending,
                     selectedIds = selectedIds,
                     onToggleSelect = { viewModel.toggleSelection(it) },
-                    onMuteClick = { muteCandidate = it }
+                    onMuteClick = { muteCandidate = it },
+                    onInspectClick = { inspectionCandidate = it }
                 )
             }
             
@@ -309,6 +313,27 @@ fun MainScreen(viewModel: NotificationViewModel) {
             }
         )
     }
+
+    inspectionCandidate?.let { candidate ->
+        AlertDialog(
+            onDismissRequest = { inspectionCandidate = null },
+            title = { Text("Metadados (Debug)") },
+            text = {
+                Box(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                    val scrollState = androidx.compose.foundation.rememberScrollState()
+                    Text(
+                        text = candidate.raw_metadata ?: "Sem metadados capturados",
+                        modifier = Modifier.verticalScroll(scrollState),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { inspectionCandidate = null }) { Text("Fechar") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -395,7 +420,8 @@ fun PendingList(
     notifications: List<NotificationEntity>, 
     selectedIds: Set<Long>,
     onToggleSelect: (Long) -> Unit,
-    onMuteClick: (NotificationEntity) -> Unit
+    onMuteClick: (NotificationEntity) -> Unit,
+    onInspectClick: (NotificationEntity) -> Unit
 ) {
     if (notifications.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -413,7 +439,8 @@ fun PendingList(
                     time = sdf.format(Date(item.created_at)),
                     isSelected = selectedIds.contains(item.id),
                     onToggleSelect = { onToggleSelect(item.id) },
-                    onMuteClick = { onMuteClick(item) }
+                    onMuteClick = { onMuteClick(item) },
+                    onInspectClick = { onInspectClick(item) }
                 )
             }
         }
@@ -426,7 +453,8 @@ fun NotificationCard(
     time: String, 
     isSelected: Boolean,
     onToggleSelect: () -> Unit,
-    onMuteClick: () -> Unit
+    onMuteClick: () -> Unit,
+    onInspectClick: () -> Unit
 ) {
     val context = LocalContext.current
     val appIcon = remember(item.package_name) {
@@ -498,6 +526,14 @@ fun NotificationCard(
 
             // Right Actions
             Column(horizontalAlignment = Alignment.End) {
+                IconButton(onClick = onInspectClick, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Inspecionar",
+                        tint = Color(0xFF6C63FF),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 IconButton(onClick = onMuteClick, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Default.NotificationsOff,
@@ -544,7 +580,8 @@ fun PreviewNotificationCard() {
         time = "11:49:41",
         isSelected = true,
         onToggleSelect = {},
-        onMuteClick = {}
+        onMuteClick = {},
+        onInspectClick = {}
     )
 }
 
