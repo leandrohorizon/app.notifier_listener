@@ -20,12 +20,10 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications 
         WHERE (:filterByPackage = 0 OR package_name IN (:packageNames))
-        AND (title LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%')
         AND (:isMuted IS NULL OR is_muted = :isMuted)
         ORDER BY created_at DESC
     """)
     fun searchNotifications(
-        query: String, 
         packageNames: List<String>, 
         filterByPackage: Boolean, 
         isMuted: Boolean?

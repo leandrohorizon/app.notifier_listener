@@ -676,8 +676,9 @@ fun FilterEditorDialog(
                         .fillMaxWidth()
                         .onKeyEvent { 
                             if (it.key == Key.Enter && tagInput.isNotBlank()) {
-                                if (!keywordList.contains(tagInput.trim())) {
-                                    keywordList = keywordList + tagInput.trim()
+                                val tag = tagInput.trim()
+                                if (tag.isNotEmpty() && !keywordList.any { it.equals(tag, ignoreCase = true) }) {
+                                    keywordList = keywordList + tag
                                 }
                                 tagInput = ""
                                 true
@@ -687,8 +688,9 @@ fun FilterEditorDialog(
                     trailingIcon = {
                         IconButton(onClick = {
                             if (tagInput.isNotBlank()) {
-                                if (!keywordList.contains(tagInput.trim())) {
-                                    keywordList = keywordList + tagInput.trim()
+                                val tag = tagInput.trim()
+                                if (tag.isNotEmpty() && !keywordList.any { it.equals(tag, ignoreCase = true) }) {
+                                    keywordList = keywordList + tag
                                 }
                                 tagInput = ""
                             }

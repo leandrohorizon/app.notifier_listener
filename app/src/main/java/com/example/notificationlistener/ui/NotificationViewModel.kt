@@ -66,17 +66,44 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         SearchParams(query, effectivePkgs, hasPackageFilter, mutedOnly, regex)
     }.flatMapLatest { params ->
         db.notificationDao().searchNotifications(
-            params.query, 
             params.pkgs, 
             params.hasFilter, 
             if (params.muted) true else null
         ).map { list ->
+            fun String.normalize(): String {
+                val nfd = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+                return nfd.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            }
+
+            val normQuery = params.query.normalize()
+            val hasQuery = normQuery.isNotBlank()
+            
             val regexStr = params.regex
-            if (regexStr != null) {
-                val r = Regex(regexStr, RegexOption.IGNORE_CASE)
-                list.filter { r.containsMatchIn("${it.title} ${it.content}") }
-            } else {
-                list
+            val r = if (regexStr != null) {
+                Regex(regexStr.normalize(), RegexOption.IGNORE_CASE)
+            } else null
+            
+            val appMap = _installedApps.value.associateBy { it.packageName }
+
+            list.filter { item ->
+                val normTitle = item.title.normalize()
+                val normContent = item.content.normalize()
+                val appName = appMap[item.package_name]?.name ?: ""
+                val normAppName = appName.normalize()
+                
+                val queryMatch = !hasQuery || 
+                    normTitle.contains(normQuery, ignoreCase = true) || 
+                    normContent.contains(normQuery, ignoreCase = true) || 
+                    normAppName.contains(normQuery, ignoreCase = true) ||
+                    item.package_name.contains(normQuery, ignoreCase = true)
+                
+                if (!queryMatch) return@filter false
+                
+                if (r != null) {
+                    r.containsMatchIn("$normTitle $normContent")
+                } else {
+                    true
+                }
             }
         }
     }
