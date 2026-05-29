@@ -676,8 +676,8 @@ fun NotificationDetailScreen(
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Notificações silenciadas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(text = "Você não receberá mais notificações deste tipo.", color = Color.Gray, fontSize = 12.sp)
+                        Text(text = "Notificações silenciada", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(text = "Se essa notificação foi silenciada indevidamente, desative a chave, seu filtro não será modificado.", color = Color.Gray, fontSize = 12.sp)
                     }
                     Switch(
                         checked = notification.is_muted,

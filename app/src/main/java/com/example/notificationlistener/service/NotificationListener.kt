@@ -33,7 +33,7 @@ class NotificationListener : NotificationListenerService() {
 
         val notification = it.notification
         val extras = notification.extras
-        val title = extras.getString("android.title") ?: ""
+        val title = extras.getCharSequence("android.title")?.toString() ?: ""
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
         val subText = extras.getCharSequence("android.subText")?.toString()
 
