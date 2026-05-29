@@ -47,34 +47,37 @@ class MainActivity : ComponentActivity() {
             NotificationListenerTheme {
                 var selectedTab by remember { mutableIntStateOf(0) }
                 val viewModel: NotificationViewModel = viewModel()
+                val viewingNotification by viewModel.viewingNotification.collectAsState()
 
                 Scaffold(
                     bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.Home, contentDescription = "Pendentes") },
-                                label = { Text("Pendentes") },
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.NotificationsOff, contentDescription = "Silenciados") },
-                                label = { Text("Mute") },
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.List, contentDescription = "Logs") },
-                                label = { Text("Logs") },
-                                selected = selectedTab == 2,
-                                onClick = { selectedTab = 2 }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.Settings, contentDescription = "Config") },
-                                label = { Text("Config") },
-                                selected = selectedTab == 3,
-                                onClick = { selectedTab = 3 }
-                            )
+                        if (viewingNotification == null) {
+                            NavigationBar {
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.Home, contentDescription = "Pendentes") },
+                                    label = { Text("Pendentes") },
+                                    selected = selectedTab == 0,
+                                    onClick = { selectedTab = 0 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.NotificationsOff, contentDescription = "Silenciados") },
+                                    label = { Text("Mute") },
+                                    selected = selectedTab == 1,
+                                    onClick = { selectedTab = 1 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.List, contentDescription = "Logs") },
+                                    label = { Text("Logs") },
+                                    selected = selectedTab == 2,
+                                    onClick = { selectedTab = 2 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.Settings, contentDescription = "Config") },
+                                    label = { Text("Config") },
+                                    selected = selectedTab == 3,
+                                    onClick = { selectedTab = 3 }
+                                )
+                            }
                         }
                     }
                 ) { innerPadding ->

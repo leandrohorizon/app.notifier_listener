@@ -1,6 +1,7 @@
 package com.example.notificationlistener.ui
 
 import android.graphics.drawable.Drawable
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -45,6 +46,7 @@ fun MainScreen(viewModel: NotificationViewModel) {
     val pending by viewModel.pendingNotifications.collectAsState(initial = emptyList())
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedIds by viewModel.selectedIds.collectAsState()
+    val viewingNotification by viewModel.viewingNotification.collectAsState()
     val savedFilters by viewModel.savedFilters.collectAsState(initial = emptyList())
     val activePreset by viewModel.activePreset.collectAsState()
     val showMutedOnly by viewModel.showMutedOnly.collectAsState()
@@ -62,6 +64,16 @@ fun MainScreen(viewModel: NotificationViewModel) {
     var showFilterEditor by remember { mutableStateOf(false) }
     var presetToDelete by remember { mutableStateOf<SavedFilterEntity?>(null) }
 
+    if (viewingNotification != null) {
+        BackHandler { viewModel.setViewingNotification(null) }
+        NotificationDetailScreen(
+            notification = viewingNotification!!,
+            onBack = { viewModel.setViewingNotification(null) },
+            onToggleMute = { viewModel.toggleMuteStatus(viewingNotification!!) }
+        )
+        return
+    }
+
     Box(modifier = Modifier
         .fillMaxSize()
         .background(Color(0xFF0F0F17))
@@ -70,25 +82,59 @@ fun MainScreen(viewModel: NotificationViewModel) {
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // 1. Barra de Busca
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Pesquisar notificações...", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color(0xFF1E1E2A),
-                    focusedBorderColor = Color(0xFF6C63FF),
-                    unfocusedContainerColor = Color(0xFF1E1E2A),
-                    focusedContainerColor = Color(0xFF1E1E2A),
-                    cursorColor = Color.White,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+            // 1. Top Bar / Busca
+            if (selectedIds.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    color = Color(0xFF1A1A23),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252535))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+                        }
+                        Text(
+                            text = "${selectedIds.size} selecionadas",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f).padding(start = 8.dp)
+                        )
+                        
+                        IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
+                            Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
+                        }
+                        
+                        IconButton(onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = Color(0xFFFF5252))
+                        }
+                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Pesquisar notificações...", color = Color.Gray) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = Color(0xFF1E1E2A),
+                        focusedBorderColor = Color(0xFF6C63FF),
+                        unfocusedContainerColor = Color(0xFF1E1E2A),
+                        focusedContainerColor = Color(0xFF1E1E2A),
+                        cursorColor = Color.White,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
                 )
-            )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -160,61 +206,16 @@ fun MainScreen(viewModel: NotificationViewModel) {
                     notifications = pending,
                     selectedIds = selectedIds,
                     onToggleSelect = { viewModel.toggleSelection(it) },
+                    onClick = { notification ->
+                        if (selectedIds.isNotEmpty()) {
+                            viewModel.toggleSelection(notification.id)
+                        } else {
+                            viewModel.setViewingNotification(notification)
+                        }
+                    },
                     onMuteClick = { muteCandidate = it },
                     onInspectClick = { inspectionCandidate = it }
                 )
-            }
-            
-            AnimatedVisibility(visible = selectedIds.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(72.dp)) // Espaço apenas quando a barra flutuante aparece
-            }
-        }
-
-        // 6. Barra de Seleção Inferior (Flutuante acima da Nav)
-        AnimatedVisibility(
-            visible = selectedIds.isNotEmpty(),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .height(56.dp),
-                color = Color(0xFF1A1A23),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252535))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = pending.isNotEmpty() && selectedIds.size == pending.size,
-                        onCheckedChange = { checked ->
-                            if (checked) viewModel.selectAll(pending.map { it.id })
-                            else viewModel.clearSelection()
-                        },
-                        colors = CheckboxDefaults.colors(
-                            checkmarkColor = Color.White,
-                            checkedColor = Color(0xFF6C63FF),
-                            uncheckedColor = Color.Gray
-                        )
-                    )
-                    Text(
-                        text = "${selectedIds.size} selecionada(s)",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f).padding(start = 8.dp)
-                    )
-                    
-                    IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
-                        Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
-                    }
-                    
-                    IconButton(onClick = { if (selectedIds.isNotEmpty()) showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Apagar", tint = Color(0xFFFF5252))
-                    }
-                }
             }
         }
     }
@@ -421,6 +422,7 @@ fun PendingList(
     notifications: List<NotificationEntity>, 
     selectedIds: Set<Long>,
     onToggleSelect: (Long) -> Unit,
+    onClick: (NotificationEntity) -> Unit,
     onMuteClick: (NotificationEntity) -> Unit,
     onInspectClick: (NotificationEntity) -> Unit
 ) {
@@ -439,7 +441,9 @@ fun PendingList(
                     item = item, 
                     time = sdf.format(Date(item.created_at)),
                     isSelected = selectedIds.contains(item.id),
+                    selectionActive = selectedIds.isNotEmpty(),
                     onToggleSelect = { onToggleSelect(item.id) },
+                    onClick = { onClick(item) },
                     onMuteClick = { onMuteClick(item) },
                     onInspectClick = { onInspectClick(item) }
                 )
@@ -448,12 +452,15 @@ fun PendingList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NotificationCard(
     item: NotificationEntity, 
     time: String, 
     isSelected: Boolean,
+    selectionActive: Boolean,
     onToggleSelect: () -> Unit,
+    onClick: () -> Unit,
     onMuteClick: () -> Unit,
     onInspectClick: () -> Unit
 ) {
@@ -472,17 +479,30 @@ fun NotificationCard(
     )
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onToggleSelect
+            ),
         shape = RoundedCornerShape(16.dp),
         color = backgroundColor,
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6C63FF)) else null,
-        onClick = onToggleSelect
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6C63FF)) else null
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Spacer(modifier = Modifier.width(8.dp))
+            if (selectionActive) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelect() },
+                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6C63FF))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            } else {
+                Spacer(modifier = Modifier.width(8.dp))
+            }
 
             // App Icon
             Box(
@@ -509,40 +529,135 @@ fun NotificationCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = item.package_name, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 10.sp)
                 Text(text = item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                if (!item.sub_text.isNullOrBlank()) {
+                    Text(text = item.sub_text, color = Color(0xFF6C63FF), fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                }
                 Text(text = item.content, color = Color.LightGray, fontSize = 13.sp, maxLines = 2)
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-//                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-//                    if (!item.category.isNullOrEmpty()) {
-//                        BadgeBadge(item.category, Color(0xFF352B35))
-//                    }
-//                    if (!item.channel_id.isNullOrEmpty()) {
-//                        BadgeBadge(item.channel_id, Color(0xFF2B2B3D))
-//                    }
-//                }
                 
                 Text(text = time, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
             }
 
             // Right Actions
-            Column(horizontalAlignment = Alignment.End) {
-                IconButton(onClick = onInspectClick, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = "Inspecionar",
-                        tint = Color(0xFF6C63FF),
-                        modifier = Modifier.size(18.dp)
-                    )
+            if (!selectionActive) {
+                Column(horizontalAlignment = Alignment.End) {
+                    IconButton(onClick = onInspectClick, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "Inspecionar",
+                            tint = Color(0xFF6C63FF),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
-//                IconButton(onClick = onMuteClick, modifier = Modifier.size(28.dp)) {
-//                    Icon(
-//                        Icons.Default.NotificationsOff,
-//                        contentDescription = null,
-//                        tint = if (item.is_muted) Color(0xFFFF5252) else Color(0xFF353545),
-//                        modifier = Modifier.size(18.dp)
-//                    )
-//                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotificationDetailScreen(
+    notification: NotificationEntity,
+    onBack: () -> Unit,
+    onToggleMute: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Detalhes da Notificação", color = Color.White) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F0F17))
+            )
+        },
+        containerColor = Color(0xFF0F0F17)
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text(
+                text = notification.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            
+            if (!notification.sub_text.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = notification.sub_text,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF6C63FF),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = notification.content,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.LightGray,
+                lineHeight = 24.sp
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Button(
+                onClick = onToggleMute,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (notification.is_muted) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    if (notification.is_muted) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (notification.is_muted) "Ativar Notificações" else "Silenciar Notificação")
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            HorizontalDivider(color = Color(0xFF252535))
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "Informações Adicionais",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.Gray
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Pacote: ${notification.package_name}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.LightGray
+            )
+            if (!notification.channel_id.isNullOrEmpty()) {
+                Text(
+                    text = "Canal: ${notification.channel_id}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
+            }
+            if (!notification.category.isNullOrEmpty()) {
+                Text(
+                    text = "Categoria: ${notification.category}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
             }
         }
     }
@@ -580,7 +695,9 @@ fun PreviewNotificationCard() {
         ),
         time = "11:49:41",
         isSelected = true,
+        selectionActive = false,
         onToggleSelect = {},
+        onClick = {},
         onMuteClick = {},
         onInspectClick = {}
     )

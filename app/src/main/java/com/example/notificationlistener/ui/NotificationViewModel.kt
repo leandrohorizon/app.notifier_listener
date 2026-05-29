@@ -117,7 +117,25 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
 
+    private val _viewingNotification = MutableStateFlow<NotificationEntity?>(null)
+    val viewingNotification = _viewingNotification.asStateFlow()
+
     val muteRules: Flow<List<MuteRuleEntity>> = db.muteRuleDao().getAllRulesFlow()
+
+    fun setViewingNotification(notification: NotificationEntity?) {
+        _viewingNotification.value = notification
+    }
+
+    fun toggleMuteStatus(notification: NotificationEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = notification.copy(is_muted = !notification.is_muted)
+            db.notificationDao().insert(updated)
+            // Se estiver visualizando a notificação, atualiza o estado para refletir a mudança
+            if (_viewingNotification.value?.id == notification.id) {
+                _viewingNotification.value = updated
+            }
+        }
+    }
 
     fun setSearchQuery(query: String) {
         _activePreset.value = null
