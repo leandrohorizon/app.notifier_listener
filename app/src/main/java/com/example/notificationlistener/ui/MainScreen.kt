@@ -494,11 +494,6 @@ fun NotificationCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selectionActive) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onToggleSelect() },
-                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6C63FF))
-                )
                 Spacer(modifier = Modifier.width(8.dp))
             } else {
                 Spacer(modifier = Modifier.width(8.dp))
@@ -561,13 +556,34 @@ fun NotificationDetailScreen(
     onBack: () -> Unit,
     onToggleMute: () -> Unit
 ) {
+    val context = LocalContext.current
+    val pm = remember { context.packageManager }
+    val appIcon = remember(notification.package_name) {
+        try { pm.getApplicationIcon(notification.package_name) } catch (e: Exception) { null }
+    }
+    val appLabel = remember(notification.package_name) {
+        try {
+            val info = pm.getApplicationInfo(notification.package_name, 0)
+            pm.getApplicationLabel(info).toString()
+        } catch (e: Exception) { notification.package_name }
+    }
+    val timestamp = remember(notification.created_at) {
+        val sdf = SimpleDateFormat("dd 'de' MMM. 'de' yyyy 'às' HH:mm", Locale.getDefault())
+        "Recebida em ${sdf.format(Date(notification.created_at))}"
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Detalhes da Notificação", color = Color.White) },
+                title = { Text("Detalhes da Notificação", color = Color.White, fontSize = 20.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { /* Menu */ }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Mais", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F0F17))
@@ -579,86 +595,152 @@ fun NotificationDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = notification.title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            
-            if (!notification.sub_text.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = notification.sub_text,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF6C63FF),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = notification.content,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.LightGray,
-                lineHeight = 24.sp
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Button(
-                onClick = onToggleMute,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (notification.is_muted) Color(0xFF4CAF50) else Color(0xFFFF5252)
-                ),
-                shape = RoundedCornerShape(12.dp)
+            // 1. App Header Card
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                color = Color(0xFF1A1A23),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(
-                    if (notification.is_muted) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (notification.is_muted) "Ativar Notificações" else "Silenciar Notificação")
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF252535)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (appIcon != null) {
+                            Image(
+                                bitmap = appIcon.toBitmap().asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        } else {
+                            Icon(Icons.Default.Android, contentDescription = null, tint = Color.Gray)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = appLabel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(text = " • ", color = Color.Gray)
+                            Text(text = notification.category ?: "Notificação", color = Color.Gray, fontSize = 14.sp)
+                        }
+                        Text(text = timestamp, color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            HorizontalDivider(color = Color(0xFF252535))
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = "Informações Adicionais",
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.Gray
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = "Pacote: ${notification.package_name}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.LightGray
-            )
+
+            // 2. Content
+            DetailField(label = "Título", content = notification.title, isBold = true)
+            notification.sub_text?.let {
+                if (it.isNotBlank()) {
+                    DetailField(label = "Subtexto", content = it)
+                }
+            }
+            DetailField(label = "Mensagem", content = notification.content)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 3. Silence Switch Card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFF1A1A23),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF252535)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsOff,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Notificações silenciadas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(text = "Você não receberá mais notificações deste tipo.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = notification.is_muted,
+                        onCheckedChange = { onToggleMute() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFFFF5252),
+                            uncheckedThumbColor = Color.Gray,
+                            uncheckedTrackColor = Color(0xFF252535)
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 4. Information Section
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Informações", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            InfoItem(icon = Icons.Default.Inventory2, label = "Pacote", value = notification.package_name)
             if (!notification.channel_id.isNullOrEmpty()) {
-                Text(
-                    text = "Canal: ${notification.channel_id}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.LightGray
-                )
+                InfoItem(icon = Icons.Default.CellTower, label = "Canal", value = notification.channel_id!!)
             }
             if (!notification.category.isNullOrEmpty()) {
-                Text(
-                    text = "Categoria: ${notification.category}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.LightGray
-                )
+                InfoItem(icon = Icons.Default.Folder, label = "Categoria", value = notification.category!!)
             }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun DetailField(label: String, content: String, isBold: Boolean = false) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(text = label, color = Color.Gray, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = content,
+            color = Color.White,
+            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 16.sp
+        )
+    }
+}
+
+@Composable
+fun InfoItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier.padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(text = label, color = Color.Gray, fontSize = 12.sp)
+            Text(text = value, color = Color.White, fontSize = 14.sp)
         }
     }
 }
