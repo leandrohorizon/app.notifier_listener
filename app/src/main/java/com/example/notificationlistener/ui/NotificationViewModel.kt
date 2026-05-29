@@ -68,7 +68,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         db.notificationDao().searchNotifications(
             params.pkgs, 
             params.hasFilter, 
-            if (params.muted) true else null
+            params.muted
         ).map { list ->
             fun String.normalize(): String {
                 val nfd = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)

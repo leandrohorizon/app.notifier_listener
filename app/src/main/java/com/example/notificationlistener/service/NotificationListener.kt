@@ -80,7 +80,7 @@ class NotificationListener : NotificationListenerService() {
             // }
 
             // 3. Mute Rules Logic - SALVA PRIMEIRO
-            val muteRules = db.muteRuleDao().getAllRules()
+            val muteRules = db.muteRuleDao().getRulesForPackage(packageName)
 
             fun String.normalizeText(): String {
                 val nfd = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
