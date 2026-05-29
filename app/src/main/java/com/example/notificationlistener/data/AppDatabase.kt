@@ -22,14 +22,15 @@ import kotlinx.coroutines.launch
         MuteRuleEntity::class,
         SavedFilterEntity::class
     ],
-    version = 10,
+    version = 11,
     autoMigrations = [
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6, spec = AppDatabase.MyAutoMigration::class),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9, spec = AppDatabase.DeleteKeywordQuerySpec::class),
-        AutoMigration(from = 9, to = 10, spec = AppDatabase.MuteMigrationSpec::class)
+        AutoMigration(from = 9, to = 10, spec = AppDatabase.MuteMigrationSpec::class),
+        AutoMigration(from = 10, to = 11)
     ],
     exportSchema = true
 )

@@ -18,10 +18,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 class NotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val notificationCache = ConcurrentHashMap<String, Long>()
+    private val CACHE_TTL_MS = 5 * 60 * 1000L
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
@@ -32,6 +35,30 @@ class NotificationListener : NotificationListenerService() {
         val extras = notification.extras
         val title = extras.getString("android.title") ?: ""
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
+        val subText = extras.getCharSequence("android.subText")?.toString()
+
+        // 1. Filtro Universal de Progresso (Ignora uploads, downloads e escaneamentos)
+        val progress = extras.getInt("android.progress")
+        if (progress > 0 && progress < 100) {
+            return
+        }
+
+        // 2. Filtro Universal de Conteúdo Estático (Desduplicação)
+        val cacheKey = "$packageName|${it.id}|$title|$text"
+        val now = System.currentTimeMillis()
+        val expiration = notificationCache[cacheKey]
+
+        if (expiration != null && now < expiration) {
+            notificationCache[cacheKey] = now + CACHE_TTL_MS
+            return
+        }
+        notificationCache[cacheKey] = now + CACHE_TTL_MS
+
+        // Limpeza ocasional do cache
+        if (notificationCache.size > 500) {
+            notificationCache.entries.removeIf { it.value < now }
+        }
+
         val category = notification.category
         val channelId = notification.channelId
 
@@ -133,6 +160,7 @@ class NotificationListener : NotificationListenerService() {
                 package_name = packageName,
                 title = title,
                 content = text,
+                sub_text = subText,
                 category = category,
                 channel_id = channelId,
                 is_muted = isMuted,
