@@ -531,20 +531,6 @@ fun NotificationCard(
                 
                 Text(text = time, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
             }
-
-            // Right Actions
-            if (!selectionActive) {
-                Column(horizontalAlignment = Alignment.End) {
-                    IconButton(onClick = onInspectClick, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = "Inspecionar",
-                            tint = Color(0xFF6C63FF),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
         }
     }
 }
