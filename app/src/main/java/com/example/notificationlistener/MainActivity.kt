@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.notificationlistener.service.ForegroundService
+import com.example.notificationlistener.service.WatchdogWorker
 import com.example.notificationlistener.ui.LogScreen
 import com.example.notificationlistener.ui.MainScreen
 import com.example.notificationlistener.ui.MuteManagementScreen
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         checkPermissions()
+        // O Watchdog agora é configurado na NotificationApplication para garantir execução automática
 
         setContent {
             NotificationListenerTheme {

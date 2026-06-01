@@ -10,10 +10,17 @@ object FileLogger {
     private const val MAX_SIZE = 1024 * 1024 // 1MB
 
     /**
-     * Grava um registro de erro no arquivo local "app_errors.txt".
+     * Grava um erro estruturado no arquivo local "app_errors.txt".
      * Se o arquivo ultrapassar 1MB, ele é resetado.
      */
-    fun writeError(context: Context, tag: String, message: String) {
+    fun writeError(
+        context: Context,
+        className: String,
+        methodName: String,
+        operation: String,
+        contextMap: Map<String, Any?>,
+        exception: Throwable?
+    ) {
         try {
             val file = File(context.filesDir, FILE_NAME)
 
@@ -24,12 +31,36 @@ object FileLogger {
 
             val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             val timestamp = sdf.format(Date())
-            val logEntry = "$timestamp [$tag] $message\n"
+
+            // Mascarar dados sensíveis no contexto
+            val maskedContext = contextMap.mapValues { (key, value) ->
+                if (isSensitive(key)) "********" else value
+            }
+
+            val contextString = maskedContext.entries.joinToString("\n") { "  ${it.key}: ${it.value}" }
+            
+            val logEntry = """
+                [$timestamp] - [ERROR]
+                [$className].[$methodName]
+                Operação: $operation
+                Contexto:
+                $contextString
+                Resultado: FALHA
+                Exceção: ${exception?.javaClass?.name}: ${exception?.localizedMessage}
+                StackTrace:
+                ${exception?.stackTraceToString() ?: "Nenhum StackTrace disponível"}
+                ----------------------------------------------------------------------
+                
+            """.trimIndent() + "\n"
 
             file.appendText(logEntry)
         } catch (e: Exception) {
-            // Em caso de erro na escrita do log, apenas imprime no Logcat para evitar loop infinito ou crash
             e.printStackTrace()
         }
+    }
+
+    private fun isSensitive(key: String): Boolean {
+        val sensitiveKeywords = listOf("token", "password", "senha", "secret", "auth", "credential", "email")
+        return sensitiveKeywords.any { key.contains(it, ignoreCase = true) }
     }
 }
