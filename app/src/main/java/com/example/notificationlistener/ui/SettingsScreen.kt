@@ -13,6 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.notificationlistener.service.WatchdogWorker
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.notificationlistener.R
@@ -71,9 +74,11 @@ fun SettingsScreen(viewModel: NotificationViewModel) {
 
         // Teste de Captura
         Button(onClick = {
-            sendTestNotification(context)
+            val watchdogRequest = OneTimeWorkRequestBuilder<WatchdogWorker>().build()
+            WorkManager.getInstance(context).enqueue(watchdogRequest)
+            LogManager.addLog("Watchdog manual disparado")
         }) {
-            Text("Gerar Notificação de Teste")
+            Text("Gerar Notificação de Teste (Watchdog)")
         }
         
         Button(onClick = {
@@ -89,23 +94,4 @@ fun SettingsScreen(viewModel: NotificationViewModel) {
 private fun isNotificationServiceEnabled(context: Context): Boolean {
     val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
     return enabledPackages.contains(context.packageName)
-}
-
-private fun sendTestNotification(context: Context) {
-    val channelId = "test_channel"
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(channelId, "Test", NotificationManager.IMPORTANCE_DEFAULT)
-        notificationManager.createNotificationChannel(channel)
-    }
-
-    val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.mipmap.ic_launcher)
-        .setContentTitle("Teste de Captura")
-        .setContentText("Esta é uma notificação de teste gerada pelo app.")
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-
-    notificationManager.notify(100, builder.build())
-    LogManager.addLog("Notificação de teste gerada")
 }

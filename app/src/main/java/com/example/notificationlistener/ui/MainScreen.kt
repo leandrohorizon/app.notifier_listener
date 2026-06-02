@@ -105,6 +105,10 @@ fun MainScreen(viewModel: NotificationViewModel) {
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f).padding(start = 8.dp)
                         )
+
+                        IconButton(onClick = { viewModel.selectAll(pending.map { it.id }) }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Selecionar Tudo", tint = Color.White)
+                        }
                         
                         IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
                             Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
@@ -531,20 +535,6 @@ fun NotificationCard(
                 
                 Text(text = time, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
             }
-
-            // Right Actions
-            if (!selectionActive) {
-                Column(horizontalAlignment = Alignment.End) {
-                    IconButton(onClick = onInspectClick, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = "Inspecionar",
-                            tint = Color(0xFF6C63FF),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -676,8 +666,8 @@ fun NotificationDetailScreen(
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Notificações silenciadas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(text = "Você não receberá mais notificações deste tipo.", color = Color.Gray, fontSize = 12.sp)
+                        Text(text = "Notificações silenciada", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(text = "Se essa notificação foi silenciada indevidamente, desative a chave, seu filtro não será modificado.", color = Color.Gray, fontSize = 12.sp)
                     }
                     Switch(
                         checked = notification.is_muted,
