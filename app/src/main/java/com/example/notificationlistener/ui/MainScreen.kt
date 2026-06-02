@@ -105,6 +105,10 @@ fun MainScreen(viewModel: NotificationViewModel) {
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f).padding(start = 8.dp)
                         )
+
+                        IconButton(onClick = { viewModel.selectAll(pending.map { it.id }) }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Selecionar Tudo", tint = Color.White)
+                        }
                         
                         IconButton(onClick = { if (pending.isNotEmpty()) showSyncConfirm = true }) {
                             Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar", tint = Color.Gray)
